@@ -4,7 +4,7 @@
 
 ## v3.1.x — Mevcut Sürüm
 
-### v3.1.2
+### v3.1.3
 - 🐛 İndirilenler paneli açıldığında liste güncel veriyi göstermiyor sorunu düzeltildi
 - 🐛 Adres çubuğuna sağ tıkla → Yapıştır ve Git düzeltildi
 - ✨ Adres çubuğu sağ tık menüsüne Kes, Kopyala, Tümünü Seç, Temizle eklendi
@@ -14,7 +14,7 @@
 - 🐛 Resimleri Yükle ayarı kapalıyken düzgün çalışmıyordu, düzeltildi
 - ✨ Portable sürüm eklendi
 
-### v3.1.1
+### v3.1.2
 - ✨ Ekran görüntüsü özelliği eklendi (📷 butonu veya Ctrl+Shift+S)
   - Tüm sayfa veya alan seçerek kaydetme
   - Farklı Kaydet dialogu
