@@ -2,7 +2,10 @@
 
 ---
 
-## v3.1.x — Mevcut Sürüm
+## v3.1.7 — Mevcut Sürüm
+- Versiyon yazım hatası düzeltildi
+- Ara versiyonlar bu sorunu çözmek içindir
+- v3.1.3 arasındaki fark ayarlarda yanlış versiyon yazıyordu
 
 ### v3.1.3
 - 🐛 İndirilenler paneli açıldığında liste güncel veriyi göstermiyor sorunu düzeltildi
