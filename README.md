@@ -290,7 +290,9 @@ Ayarlar → Tema:
 
 ---
 Wiki https://github.com/edizdar/ED-Browser/wiki/ED-Browser-Rehber
+
 İndir https://github.com/edizdar/ED-Browser/releases
+
 Sürüm Notları https://github.com/edizdar/ED-Browser/blob/main/CHANGELOG.md
 
 *ED Browser — Geliştirici: [Erol Dizdar](https://eroldizdar.tr)*
