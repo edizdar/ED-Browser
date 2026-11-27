@@ -11,7 +11,7 @@ namespace EDBrowser.Setup;
 public sealed class SetupForm : Form
 {
     private const string AppName = "ED Browser";
-    private const string AppVersion = "4.3.0";
+    private const string AppVersion = "4.4.0";
     private const string UninstallKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\EDBrowser";
 
     [DllImport("dwmapi.dll")]

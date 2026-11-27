@@ -1,4 +1,4 @@
-# 🔒 ED Browser — Şeffaflık & Gizlilik Raporu (`v4.3.0`)
+# 🔒 ED Browser — Şeffaflık & Gizlilik Raporu (`v4.4.0`)
 
 Bu belge **ED Browser** uygulamasının tam olarak hangi verileri topladığını, neleri **kesinlikle toplamadığını**, hangi gizlilik/VPN korumalarını sunduğunu ve kullandığı **Chromium (Edge WebView2)** motorunun sınırlarını şeffaf biçimde açıklar.
 
@@ -34,17 +34,19 @@ Bu belge **ED Browser** uygulamasının tam olarak hangi verileri topladığın�
 ---
 
 ## 4. VPN / Tünel Seçenekleri (Dürüst Teknik Açıklama)
-ED Browser bağımsız bir ücretli VPN sunucu ağı kiralamaz; **tamamen şeffaf ve kullanıcı kontrollü 4 tünel yöntemi** sunar:
-1. **Cloudflare WARP Yerel Tüneli (`127.0.0.1:40000`):** Sisteminizde Cloudflare WARP yerel SOCKS5 proxy modunda çalışıyorsa tek tıkla WebView2 trafiğini WARP üzerinden geçirir (`VPN` rozetinden port durumu canlı algılanır).
-2. **Tor Ağı (`127.0.0.1:9050` / `9150`):** Sisteminizde Tor servisi veya Tor Browser çalışıyorsa WebView2 trafiğini Tor SOCKS5 tünelinden geçirir.
-3. **Özel VPN / SOCKS5 / HTTPS Proxy Profilleri:** Kendi WireGuard/OpenVPN SOCKS5 köprünüzü, SSH tünelinizi veya HTTPS proxy sunucunuzu kullanıcı adı/şifre desteğiyle profil olarak kaydedebilirsiniz (`IP Test Et` ile çıkış IP ve ülkesi doğrudan doğrulanır).
-4. **Chrome Web Store VPN Eklentileri:** `VPN Eklentisi Kur` kısayoluyla Chrome Web Store'daki VPN uzantılarını WebView2'ye kurabilirsiniz.
+ED Browser bağımsız bir ücretli VPN sunucu ağı kiralamaz; yeniden başlatma gerektirmeyen yerel **`LocalVpnRouterService`** üzerinden **tamamen kullanıcı kontrollü 4 bağlantı yöntemi** sunar:
+1. **Yerleşik Canlı Ücretsiz Sunucu Tarayıcısı (`Sunucu Bul`):** ProxyScrape ve GeoNode kamuya açık SOCKS5/HTTP rölelerini çekip HTTPS TLS + çıkış IP/ülke doğrulaması yaparak tek tıkla bağlar. *Önemli Not:* Ücretsiz topluluk röleleri IP/ülkenizi değiştirir ve HTTPS trafiğiniz TLS ile şifrelidir; ancak üçüncü taraf röle operatörleri sıfır-kayıt (no-log) garantisi vermediğinden hassas hesaplar yerine hızlı IP/erişim değişimi için kullanılmalıdır.
+2. **Cloudflare WARP Yerel Tüneli (`127.0.0.1:40000`):** Sisteminizde Cloudflare WARP yerel SOCKS5 proxy modunda çalışıyorsa anında WebView2 trafiğini WARP üzerinden geçirir.
+3. **Tor Ağı (`127.0.0.1:9050` / `9150`):** Sisteminizde Tor servisi veya Tor Browser çalışıyorsa WebView2 trafiğini Tor SOCKS5 tünelinden geçirir (alan adı çözümlemesi ATYP `0x03` ile uzak düğümde yapılır).
+4. **Özel VPN / SOCKS5 / HTTPS Proxy Profilleri:** Kendi WireGuard/OpenVPN SOCKS5 köprünüzü, SSH tünelinizi veya HTTPS proxy sunucunuzu kullanıcı adı/şifre desteğiyle profil olarak kaydedebilirsiniz (`IP Test Et` ile çıkış IP ve ülkesi doğrudan doğrulanır).
+5. **Chrome Web Store VPN Eklentileri:** `VPN Eklentisi` kısayoluyla Chrome Web Store'daki VPN uzantılarını WebView2'ye kurabilirsiniz.
 
 ---
 
 ## 5. Arka Planda Kurulan İsteğe Bağlı Ağ Bağlantıları
 ED Browser yalnızca sizin açtığınız web sayfaları dışında şu opsiyonel bağlantıları kurar:
 - **Güncelleme Kontrolü:** Başlangıçta (Ayarlar'dan kapatılabilir) veya `Güncellemeleri Denetle` butonuna bastığınızda yalnızca `api.github.com/repos/edizdar/ED-Browser/releases/latest` (ve limit durumunda `github.com/edizdar/ED-Browser/releases/latest`) adresini sorgular.
+- **Ücretsiz VPN Sunucu Tarayıcısı (`Sunucu Bul`):** Yalnızca `Sunucu Bul` butonuna bastığınızda veya ücretsiz modda VPN'i ilk kez açtığınızda `api.proxyscrape.com`, `proxylist.geonode.com` ve doğrulama için `https://cloudflare.com/cdn-cgi/trace` sorgulanır.
 - **IP Test Aracı:** Yalnızca `IP Test Et` butonuna bastığınızda `https://cloudflare.com/cdn-cgi/trace` üzerinden çıkış IP adresinizi gösterir.
 - **Eklenti Kurulumu:** Yalnızca siz bir mağaza eklentisini kurmayı seçtiğinizde `clients2.google.com` veya `edge.microsoft.com` üzerinden `.crx` paketini indirir.
 

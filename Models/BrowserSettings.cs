@@ -12,7 +12,8 @@ public enum ProxyMode
     System = 1,
     Custom = 2,
     Tor = 3,
-    CloudflareWarp = 4
+    CloudflareWarp = 4,
+    FreeCommunity = 5
 }
 
 public enum DohProvider
@@ -34,7 +35,7 @@ public sealed class VpnProfile
 
 public sealed class BrowserSettings
 {
-    public string Version { get; set; } = "4.3.0";
+    public string Version { get; set; } = "4.4.0";
     public string HomePage { get; set; } = "https://www.google.com";
     public string SearchEngine { get; set; } = "https://www.google.com/search?q=";
     public BrowserTheme Theme { get; set; } = BrowserTheme.Dark;
@@ -52,8 +53,12 @@ public sealed class BrowserSettings
     public int RendererProcessLimit { get; set; } = 2;
 
     // Privacy & VPN / Proxy / DoH settings
+    public bool VpnEnabled { get; set; } = false;
     public ProxyMode ProxyMode { get; set; } = ProxyMode.System;
     public string CustomProxy { get; set; } = string.Empty;
+    public string ActiveFreeServerUrl { get; set; } = string.Empty;
+    public string ActiveFreeServerLabel { get; set; } = string.Empty;
+    public string ActiveFreeServerCountry { get; set; } = string.Empty;
     public List<VpnProfile> VpnProfiles { get; set; } = new();
     public string ActiveVpnProfileId { get; set; } = string.Empty;
     public DohProvider DohProvider { get; set; } = DohProvider.Cloudflare;

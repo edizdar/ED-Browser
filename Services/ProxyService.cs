@@ -1,7 +1,10 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using EDBrowser.Models;
 
@@ -9,8 +12,20 @@ namespace EDBrowser.Services;
 
 public sealed record IpTraceInfo(string Ip, string Location, bool Success, string TunnelLabel = "Sistem");
 
+public sealed record FreeVpnServer(
+    string ProxyUrl,
+    string Protocol,
+    string CountryCode,
+    string CountryName,
+    int LatencyMs,
+    string ExitIp)
+{
+    public string DisplayText => $"{CountryCode} — {CountryName} ({LatencyMs} ms) • {Protocol.ToUpperInvariant()}";
+}
+
 /// <summary>
-/// Manages Chromium proxy/VPN tunnel arguments (Custom SOCKS5/HTTPS VPN profiles,
+/// Manages Chromium proxy/VPN tunnel arguments (Zero-restart LocalVpnRouterService,
+/// Built-in Verified Free Server Scanner, Custom SOCKS5/HTTPS VPN profiles,
 /// Cloudflare WARP 127.0.0.1:40000, Tor 127.0.0.1:9050/9150), multi-provider DoH,
 /// proxy-aware IP trace, HTTPS-Only upgrades, and tracking parameter stripping.
 /// </summary>
@@ -24,19 +39,65 @@ public static partial class ProxyService
         "oly_anon_id", "oly_enc_id", "_hsenc", "_hsmi", "vero_id"
     };
 
+    private static readonly Dictionary<string, string> CountryNamesTr = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["DE"] = "Almanya",
+        ["NL"] = "Hollanda",
+        ["US"] = "ABD",
+        ["GB"] = "İngiltere",
+        ["FR"] = "Fransa",
+        ["SG"] = "Singapur",
+        ["JP"] = "Japonya",
+        ["CA"] = "Kanada",
+        ["CH"] = "İsviçre",
+        ["SE"] = "İsveç",
+        ["FI"] = "Finlandiya",
+        ["PL"] = "Polonya",
+        ["TR"] = "Türkiye",
+        ["RO"] = "Romanya",
+        ["IT"] = "İtalya",
+        ["ES"] = "İspanya",
+        ["BR"] = "Brezilya",
+        ["KR"] = "G. Kore",
+        ["IN"] = "Hindistan",
+        ["AU"] = "Avustralya",
+        ["AT"] = "Avusturya",
+        ["BE"] = "Belçika",
+        ["CZ"] = "Çekya",
+        ["NO"] = "Norveç",
+        ["IE"] = "İrlanda",
+        ["HK"] = "Hong Kong",
+        ["TW"] = "Tayvan",
+        ["UA"] = "Ukrayna",
+        ["ID"] = "Endonezya",
+        ["TH"] = "Tayland"
+    };
+
     [GeneratedRegex(@"ip=(.+)", RegexOptions.Compiled)]
     private static partial Regex IpRegex();
 
     [GeneratedRegex(@"loc=(.+)", RegexOptions.Compiled)]
     private static partial Regex LocRegex();
 
+    public static string MapCountryNameTr(string? isoCode, string? fallbackName = null)
+    {
+        if (!string.IsNullOrWhiteSpace(isoCode) && CountryNamesTr.TryGetValue(isoCode.Trim(), out var tr))
+            return tr;
+        if (!string.IsNullOrWhiteSpace(fallbackName))
+            return fallbackName.Trim();
+        return string.IsNullOrWhiteSpace(isoCode) ? "Bilinmiyor" : isoCode.Trim().ToUpperInvariant();
+    }
+
     public static VpnProfile? GetActiveVpnProfile(BrowserSettings s) =>
         string.IsNullOrEmpty(s.ActiveVpnProfileId)
             ? null
             : s.VpnProfiles.FirstOrDefault(p => p.Id == s.ActiveVpnProfileId);
 
-    public static string? ResolveEffectiveProxyUrl(BrowserSettings s, bool torFallback9150 = false)
+    public static string? ResolveEffectiveProxyUrl(BrowserSettings s, bool torFallback9150 = false, bool ignoreVpnEnabledFlag = false)
     {
+        if (!ignoreVpnEnabledFlag && !s.VpnEnabled)
+            return null;
+
         switch (s.ProxyMode)
         {
             case ProxyMode.Tor:
@@ -46,6 +107,9 @@ public static partial class ProxyService
 
             case ProxyMode.CloudflareWarp:
                 return "socks5://127.0.0.1:40000";
+
+            case ProxyMode.FreeCommunity:
+                return string.IsNullOrWhiteSpace(s.ActiveFreeServerUrl) ? null : s.ActiveFreeServerUrl.Trim();
 
             case ProxyMode.Custom:
                 var prof = GetActiveVpnProfile(s);
@@ -61,29 +125,38 @@ public static partial class ProxyService
         }
     }
 
-    public static string BuildChromiumProxyArgs(BrowserSettings settings)
+    public static string BuildChromiumProxyArgs(BrowserSettings settings, int localRouterPort = 0)
     {
         var args = new List<string>();
-        switch (settings.ProxyMode)
+        if (localRouterPort > 0)
         {
-            case ProxyMode.Direct:
-                args.Add("--no-proxy-server");
-                break;
+            args.Add($"--proxy-server=\"http://127.0.0.1:{localRouterPort}\"");
+            args.Add("--proxy-bypass-list=\"localhost;127.0.0.1;<local>\"");
+        }
+        else
+        {
+            switch (settings.ProxyMode)
+            {
+                case ProxyMode.Direct:
+                    args.Add("--no-proxy-server");
+                    break;
 
-            case ProxyMode.Tor:
-            case ProxyMode.CloudflareWarp:
-            case ProxyMode.Custom:
-                var eff = ResolveEffectiveProxyUrl(settings);
-                if (!string.IsNullOrWhiteSpace(eff))
-                {
-                    args.Add($"--proxy-server=\"{eff}\"");
-                    args.Add("--proxy-bypass-list=\"localhost;127.0.0.1;<local>\"");
-                }
-                break;
+                case ProxyMode.Tor:
+                case ProxyMode.CloudflareWarp:
+                case ProxyMode.Custom:
+                case ProxyMode.FreeCommunity:
+                    var eff = ResolveEffectiveProxyUrl(settings, ignoreVpnEnabledFlag: true);
+                    if (!string.IsNullOrWhiteSpace(eff))
+                    {
+                        args.Add($"--proxy-server=\"{eff}\"");
+                        args.Add("--proxy-bypass-list=\"localhost;127.0.0.1;<local>\"");
+                    }
+                    break;
 
-            case ProxyMode.System:
-            default:
-                break;
+                case ProxyMode.System:
+                default:
+                    break;
+            }
         }
 
         string? dohTemplate = settings.DohProvider switch
@@ -135,23 +208,39 @@ public static partial class ProxyService
         }
     }
 
-    public static async Task<IpTraceInfo> FetchTraceAsync(BrowserSettings? settings = null)
+    public static async Task<IpTraceInfo> FetchTraceAsync(BrowserSettings? settings = null, int localRouterPort = 0)
     {
-        string label = settings?.ProxyMode switch
+        string label;
+        if (settings is { VpnEnabled: false })
         {
-            ProxyMode.Direct => "Doğrudan",
-            ProxyMode.Tor => "Tor Ağı",
-            ProxyMode.CloudflareWarp => "Cloudflare WARP",
-            ProxyMode.Custom => GetActiveVpnProfile(settings)?.Name is { Length: > 0 } pn ? pn : "Özel VPN/Proxy",
-            _ => "Sistem"
-        };
+            label = settings.ProxyMode == ProxyMode.System ? "VPN Kapalı (Sistem)" : "VPN Kapalı (Doğrudan)";
+        }
+        else
+        {
+            label = settings?.ProxyMode switch
+            {
+                ProxyMode.Direct => "Doğrudan",
+                ProxyMode.Tor => "Tor Ağı",
+                ProxyMode.CloudflareWarp => "Cloudflare WARP",
+                ProxyMode.FreeCommunity => string.IsNullOrEmpty(settings.ActiveFreeServerCountry)
+                    ? "Ücretsiz VPN"
+                    : $"Ücretsiz VPN ({settings.ActiveFreeServerCountry})",
+                ProxyMode.Custom => GetActiveVpnProfile(settings)?.Name is { Length: > 0 } pn ? pn : "Özel VPN/Proxy",
+                _ => "Sistem"
+            };
+        }
 
         try
         {
             using var handler = new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(5) };
-            if (settings is not null)
+            if (localRouterPort > 0)
             {
-                if (settings.ProxyMode == ProxyMode.Direct)
+                handler.Proxy = new WebProxy($"http://127.0.0.1:{localRouterPort}");
+                handler.UseProxy = true;
+            }
+            else if (settings is not null)
+            {
+                if (!settings.VpnEnabled && settings.ProxyMode == ProxyMode.Direct)
                 {
                     handler.UseProxy = false;
                 }
@@ -170,7 +259,7 @@ public static partial class ProxyService
                 }
             }
 
-            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(7) };
+            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(8) };
             var raw = await http.GetStringAsync("https://cloudflare.com/cdn-cgi/trace");
             var ip = IpRegex().Match(raw).Groups[1].Value.Trim();
             var loc = LocRegex().Match(raw).Groups[1].Value.Trim();
@@ -184,6 +273,178 @@ public static partial class ProxyService
         {
             return new IpTraceInfo("Bağlantı hatası", "", false, label);
         }
+    }
+
+    private sealed record CandidateRelay(string ProxyUrl, string Protocol, string CountryCode, string FallbackCountry);
+
+    public static async Task<List<FreeVpnServer>> DiscoverVerifiedFreeRelaysAsync(int maxVerified = 8, CancellationToken ct = default)
+    {
+        var candidates = new Dictionary<string, CandidateRelay>(StringComparer.OrdinalIgnoreCase);
+        using var fetchHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(7) };
+        fetchHttp.DefaultRequestHeaders.UserAgent.ParseAdd("EDBrowser/4.4");
+
+        var tProxyScrape = FetchProxyScrapeCandidatesAsync(fetchHttp, ct);
+        var tGeoNode = FetchGeoNodeCandidatesAsync(fetchHttp, ct);
+        await Task.WhenAll(tProxyScrape, tGeoNode).ConfigureAwait(false);
+
+        foreach (var c in tProxyScrape.Result.Concat(tGeoNode.Result))
+        {
+            candidates.TryAdd(c.ProxyUrl, c);
+        }
+
+        if (candidates.Count == 0)
+            return new List<FreeVpnServer>();
+
+        var ordered = candidates.Values
+            .OrderByDescending(c => c.Protocol.Equals("socks5", StringComparison.OrdinalIgnoreCase))
+            .Take(36)
+            .ToList();
+
+        var verified = new ConcurrentBag<FreeVpnServer>();
+        using var sem = new SemaphoreSlim(10, 10);
+        using var verifyCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+        var tasks = ordered.Select(async cand =>
+        {
+            if (verifyCts.IsCancellationRequested) return;
+            try
+            {
+                await sem.WaitAsync(verifyCts.Token).ConfigureAwait(false);
+            }
+            catch
+            {
+                return;
+            }
+
+            try
+            {
+                if (verifyCts.IsCancellationRequested) return;
+                using var perProbeCts = CancellationTokenSource.CreateLinkedTokenSource(verifyCts.Token);
+                perProbeCts.CancelAfter(TimeSpan.FromMilliseconds(3500));
+
+                using var handler = new SocketsHttpHandler
+                {
+                    Proxy = new WebProxy(cand.ProxyUrl),
+                    UseProxy = true,
+                    ConnectTimeout = TimeSpan.FromMilliseconds(2800)
+                };
+                using var client = new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(3400) };
+
+                var sw = Stopwatch.StartNew();
+                var trace = await client.GetStringAsync("https://cloudflare.com/cdn-cgi/trace", perProbeCts.Token).ConfigureAwait(false);
+                sw.Stop();
+
+                var ip = IpRegex().Match(trace).Groups[1].Value.Trim();
+                var loc = LocRegex().Match(trace).Groups[1].Value.Trim();
+                if (string.IsNullOrWhiteSpace(ip)) return;
+
+                var cc = string.IsNullOrWhiteSpace(loc) ? cand.CountryCode : loc.ToUpperInvariant();
+                if (string.IsNullOrWhiteSpace(cc)) cc = "GL";
+                var name = MapCountryNameTr(cc, cand.FallbackCountry);
+
+                verified.Add(new FreeVpnServer(
+                    cand.ProxyUrl,
+                    cand.Protocol,
+                    cc,
+                    name,
+                    (int)Math.Max(1, sw.ElapsedMilliseconds),
+                    ip));
+
+                if (verified.Count >= maxVerified)
+                    verifyCts.Cancel();
+            }
+            catch
+            {
+                // Candidate unreachable or slow
+            }
+            finally
+            {
+                sem.Release();
+            }
+        });
+
+        try { await Task.WhenAll(tasks).ConfigureAwait(false); } catch { }
+
+        return verified
+            .OrderBy(v => v.LatencyMs)
+            .Take(maxVerified)
+            .ToList();
+    }
+
+    private static async Task<List<CandidateRelay>> FetchProxyScrapeCandidatesAsync(HttpClient http, CancellationToken ct)
+    {
+        var list = new List<CandidateRelay>();
+        try
+        {
+            const string url = "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=json&limit=40";
+            var json = await http.GetStringAsync(url, ct).ConfigureAwait(false);
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("proxies", out var arr) || arr.ValueKind != JsonValueKind.Array)
+                return list;
+
+            foreach (var item in arr.EnumerateArray())
+            {
+                if (item.TryGetProperty("alive", out var aliveEl) && aliveEl.ValueKind == JsonValueKind.False)
+                    continue;
+                var proto = item.TryGetProperty("protocol", out var pr) ? pr.GetString()?.ToLowerInvariant() ?? "" : "";
+                if (proto != "socks5" && proto != "http" && proto != "https") continue;
+                if (proto == "https") proto = "http";
+
+                var ip = item.TryGetProperty("ip", out var ipEl) ? ipEl.GetString() : null;
+                int port = item.TryGetProperty("port", out var portEl) && portEl.TryGetInt32(out int pv) ? pv : 0;
+                if (string.IsNullOrWhiteSpace(ip) || port <= 0) continue;
+
+                string cc = "";
+                string country = "";
+                if (item.TryGetProperty("ip_data", out var ipData) && ipData.ValueKind == JsonValueKind.Object)
+                {
+                    if (ipData.TryGetProperty("countryCode", out var ccEl)) cc = ccEl.GetString() ?? "";
+                    if (ipData.TryGetProperty("country", out var cnEl)) country = cnEl.GetString() ?? "";
+                }
+                list.Add(new CandidateRelay($"{proto}://{ip}:{port}", proto, cc, country));
+            }
+        }
+        catch { }
+        return list;
+    }
+
+    private static async Task<List<CandidateRelay>> FetchGeoNodeCandidatesAsync(HttpClient http, CancellationToken ct)
+    {
+        var list = new List<CandidateRelay>();
+        try
+        {
+            const string url = "https://proxylist.geonode.com/api/proxy-list?limit=35&page=1&sort_by=lastChecked&sort_type=desc&protocols=socks5%2Chttp";
+            var json = await http.GetStringAsync(url, ct).ConfigureAwait(false);
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("data", out var arr) || arr.ValueKind != JsonValueKind.Array)
+                return list;
+
+            foreach (var item in arr.EnumerateArray())
+            {
+                var ip = item.TryGetProperty("ip", out var ipEl) ? ipEl.GetString() : null;
+                string? portStr = item.TryGetProperty("port", out var portEl)
+                    ? (portEl.ValueKind == JsonValueKind.Number ? portEl.GetInt32().ToString() : portEl.GetString())
+                    : null;
+                if (string.IsNullOrWhiteSpace(ip) || !int.TryParse(portStr, out int port) || port <= 0) continue;
+
+                string proto = "";
+                if (item.TryGetProperty("protocols", out var pArr) && pArr.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var p in pArr.EnumerateArray())
+                    {
+                        var pv = p.GetString()?.ToLowerInvariant() ?? "";
+                        if (pv == "socks5") { proto = "socks5"; break; }
+                        if (pv is "http" or "https") proto = "http";
+                    }
+                }
+                if (string.IsNullOrEmpty(proto)) continue;
+
+                string cc = item.TryGetProperty("country", out var ccEl) ? ccEl.GetString() ?? "" : "";
+                list.Add(new CandidateRelay($"{proto}://{ip}:{port}", proto, cc, ""));
+            }
+        }
+        catch { }
+        return list;
     }
 
     public static string CleanTrackingParameters(string url)

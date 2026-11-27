@@ -89,7 +89,14 @@ internal static class Program
             }
         }
 
-        using var mainForm = new MainForm(context, incognito, initialUrl);
-        Application.Run(mainForm);
+        try
+        {
+            using var mainForm = new MainForm(context, incognito, initialUrl);
+            Application.Run(mainForm);
+        }
+        finally
+        {
+            context.VpnRouter.Dispose();
+        }
     }
 }

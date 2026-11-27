@@ -10,6 +10,7 @@ public sealed class BrowserContext
     public PasswordVaultService Vault { get; }
     public AdBlockerService AdBlocker { get; }
     public ExtensionService Extensions { get; }
+    public LocalVpnRouterService VpnRouter { get; }
     public List<BookmarkItem> Bookmarks { get; set; }
     public List<HistoryEntry> History { get; set; }
     public List<DownloadRecord> Downloads { get; set; }
@@ -25,6 +26,9 @@ public sealed class BrowserContext
         Vault = new PasswordVaultService(Storage);
         AdBlocker = new AdBlockerService();
         Extensions = new ExtensionService(Storage);
+        VpnRouter = new LocalVpnRouterService();
+        VpnRouter.Start();
+        VpnRouter.ApplySettings(Settings);
         Bookmarks = Storage.LoadBookmarks();
         History = Storage.LoadHistory();
         Downloads = Storage.LoadDownloads();
@@ -42,7 +46,7 @@ public sealed class BrowserContext
             if (userDataOverride is null && _sharedEnv is not null)
                 return _sharedEnv;
 
-            var args = BuildBrowserArguments(Settings);
+            var args = BuildBrowserArguments(Settings, VpnRouter.ListenPort);
             var options = new CoreWebView2EnvironmentOptions(args)
             {
                 Language = "tr-TR",
@@ -61,7 +65,7 @@ public sealed class BrowserContext
         }
     }
 
-    public static string BuildBrowserArguments(BrowserSettings s)
+    public static string BuildBrowserArguments(BrowserSettings s, int localRouterPort = 0)
     {
         var args = new List<string>
         {
@@ -89,7 +93,7 @@ public sealed class BrowserContext
         if (s.BackgroundTabThrottle)
             args.Add("--enable-features=QuickIntensiveWakeUpThrottlingAfterLoading");
 
-        var proxyArgs = ProxyService.BuildChromiumProxyArgs(s);
+        var proxyArgs = ProxyService.BuildChromiumProxyArgs(s, localRouterPort);
         if (!string.IsNullOrWhiteSpace(proxyArgs))
             args.Add(proxyArgs);
 

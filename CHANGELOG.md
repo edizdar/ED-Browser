@@ -2,6 +2,18 @@
 
 ---
 
+## v4.4.0 — Tek Tıkla Anlık VPN, Sıfır Yeniden Başlatmalı Router & Yerleşik Sunucu Tarayıcısı
+- ⚡ **Yeniden Başlatmasız Anlık VPN Anahtarı (`Services/LocalVpnRouterService.cs`):**
+  - Tarayıcı başlangıcında `127.0.0.1` üzerinde hafif asenkron HTTP/CONNECT & SOCKS5 (RFC 1928/1929) yönlendirici başlar; WebView2 bu yerel yönlendiriciye bağlı kalır.
+  - Üst menüdeki `VPN` rozetinden **VPN Koruması** açılıp kapatıldığında veya ülke/tünel değiştirildiğinde **tarayıcı kapanmadan** bir sonraki bağlantı anında yeni tünel üzerinden geçer; adres çubuğu rozeti canlı olarak `VPN • DE`, `WARP ✓`, `TOR ✓` şeklinde güncellenir.
+- 🌍 **"VPN Profili Nereden Bulacağım?" Sorununa Yerleşik Çözüm (`Sunucu Bul`):**
+  - VPN paneline **Canlı Ücretsiz VPN Sunucu Tarayıcısı** eklendi (`ProxyService.DiscoverVerifiedFreeRelaysAsync`): GeoNode ve ProxyScrape listelerinden çekilen SOCKS5/HTTP adayları `cloudflare.com/cdn-cgi/trace` üzerinden paralel HTTPS gecikme/ülke doğrulamasından geçirilerek çalışan sunucular anında listelenir ve tek tıkla bağlanır.
+  - Ayrıca tek tıkla **WARP İndir**, **Tor İndir**, **VPN Eklentisi (Chrome Web Store)** ve `+ Ekle` ile özel WireGuard/SOCKS5/HTTPS profili ekleme kısayolları panel içine eklendi.
+- 🐛 **VPN Paneli Açılır Liste (ComboBox) Kapanma Hatası Düzeltildi:**
+  - `VpnPrivacyPopup` içinde açılır listeye tıklandığında dışarı tıklama algılayıcısının popup'ı erken kapatmasına yol açan hata, `_comboDropDownOpen` korumasıyla tamamen giderildi.
+
+---
+
 ## v4.3.0 — VPN Tünel Merkezi, Kapsamlı Gizlilik Kalkanı & Şeffaflık Raporu
 - 🔐 **Opera/Brave Tarzı VPN & Gizlilik Kalkanı (`VPN` Omnibox Rozeti):**
   - **4 Tünel Modu:** Doğrudan, Sistem Proxy, **Özel VPN / SOCKS5 / HTTPS Profilleri** (kullanıcı adı/şifre desteği dahil), **Tor Ağı (`127.0.0.1:9050` / `9150`)** ve **Cloudflare WARP (`127.0.0.1:40000`)**.

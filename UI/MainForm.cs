@@ -214,12 +214,12 @@ public sealed class MainForm : Form
             IconType = VectorIcon.None,
             LabelText = "VPN",
             Dock = DockStyle.Left,
-            Size = new Size(52, 30),
+            Size = new Size(74, 30),
             CornerRadius = 12,
             Font = new Font("Segoe UI", 7.75f, FontStyle.Bold),
             Margin = new Padding(2, 0, 2, 0)
         };
-        _vpnBtn.SetTooltip("VPN, Proxy, DoH ve Gizlilik Kalkanı");
+        _vpnBtn.SetTooltip("VPN, Anlık Sunucu Seçici, DoH ve Gizlilik Kalkanı");
         _vpnBtn.Click += (_, _) => ShowVpnPrivacyPopup();
 
         _urlBox = new TextBox
@@ -1083,22 +1083,34 @@ public sealed class MainForm : Form
 
     private void UpdateVpnBadge()
     {
-        var mode = _ctx.Settings.ProxyMode;
-        bool tunnelActive = mode is ProxyMode.CloudflareWarp or ProxyMode.Tor or ProxyMode.Custom;
-        _vpnBtn.LabelText = mode switch
+        var s = _ctx.Settings;
+        bool tunnelActive = s.VpnEnabled;
+        if (!tunnelActive)
         {
-            ProxyMode.Tor => "TOR",
-            ProxyMode.CloudflareWarp => "WARP",
+            _vpnBtn.LabelText = "VPN";
+            _vpnBtn.NormalBg = _palette.ElevatedBg;
+            _vpnBtn.HoverBg = _palette.HoverBg;
+            _vpnBtn.IconColor = _palette.TextMuted;
+            _vpnBtn.BorderColor = _palette.Border;
+            _vpnBtn.SetTooltip($"VPN Kapalı • DoH: {s.DohProvider}\nTek tıkla açmak ve sunucu seçmek için tıkla");
+            return;
+        }
+
+        _vpnBtn.LabelText = s.ProxyMode switch
+        {
+            ProxyMode.FreeCommunity when !string.IsNullOrWhiteSpace(s.ActiveFreeServerCountry)
+                => $"VPN • {s.ActiveFreeServerCountry}",
+            ProxyMode.FreeCommunity => "VPN ✓",
+            ProxyMode.CloudflareWarp => "WARP ✓",
+            ProxyMode.Tor => "TOR ✓",
             ProxyMode.Custom => "VPN ✓",
-            _ => "VPN"
+            _ => "VPN ✓"
         };
-        _vpnBtn.NormalBg = tunnelActive ? Color.FromArgb(35, _palette.Green) : _palette.ElevatedBg;
+        _vpnBtn.NormalBg = Color.FromArgb(38, _palette.Green);
         _vpnBtn.HoverBg = _palette.HoverBg;
-        _vpnBtn.IconColor = tunnelActive ? _palette.Green : _palette.TextMuted;
-        _vpnBtn.BorderColor = tunnelActive ? _palette.Green : _palette.Border;
-        _vpnBtn.SetTooltip(tunnelActive
-            ? $"Aktif Tünel: {_vpnBtn.LabelText} • DoH: {_ctx.Settings.DohProvider}\nTıkla: VPN & Gizlilik Kalkanı"
-            : $"VPN / Proxy: {_ctx.Settings.ProxyMode} • DoH: {_ctx.Settings.DohProvider}\nTıkla: VPN & Gizlilik Kalkanı");
+        _vpnBtn.IconColor = _palette.Green;
+        _vpnBtn.BorderColor = _palette.Green;
+        _vpnBtn.SetTooltip($"Aktif VPN: {_ctx.VpnRouter.CurrentRouteSummary} (Router :{_ctx.VpnRouter.ListenPort})\nDoH: {s.DohProvider} • Tıkla: Yönet");
     }
 
     private void ShowVpnPrivacyPopup()
@@ -1917,6 +1929,7 @@ public sealed class MainForm : Form
         using var dlg = new SettingsDialog(_ctx, _palette, OpenImportDialog);
         if (dlg.ShowDialog(this) == DialogResult.OK && dlg.Saved)
         {
+            _ctx.VpnRouter.ApplySettings(_ctx.Settings);
             _palette = ThemeService.GetPalette(_ctx.Settings.Theme, _incognito);
             ApplyTheme();
             RenderBookmarksBar();
@@ -2426,8 +2439,65 @@ public sealed class MainForm : Form
                 vpnPop.Show();
                 Application.DoEvents();
                 Assert(vpnPop.Visible, "VpnPrivacyPopup renders cleanly");
+
+                bool initialVpn = dummyCtx.Settings.VpnEnabled;
+                vpnPop.SimulateVpnToggleForTest(true);
+                bool enabledOk = dummyCtx.Settings.VpnEnabled && vpnPop.Visible;
+                vpnPop.SimulateVpnToggleForTest(false);
+                bool disabledOk = !dummyCtx.Settings.VpnEnabled && vpnPop.Visible;
+                dummyCtx.Settings.VpnEnabled = initialVpn;
+                Assert(enabledOk && disabledOk, "VpnPrivacyPopup instant ON/OFF toggle works without closing popup or restarting");
+
                 vpnPop.SafeClose();
             }
+
+            // 7. Test LocalVpnRouterService zero-restart HTTP loopback proxy & live tunnel switching
+            using (var echoListener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0))
+            using (var router = new LocalVpnRouterService())
+            {
+                echoListener.Start();
+                int echoPort = ((System.Net.IPEndPoint)echoListener.LocalEndpoint).Port;
+                using var echoCts = new CancellationTokenSource();
+                _ = Task.Run(async () =>
+                {
+                    while (!echoCts.IsCancellationRequested)
+                    {
+                        try
+                        {
+                            using var c = await echoListener.AcceptTcpClientAsync(echoCts.Token);
+                            using var st = c.GetStream();
+                            var buf = new byte[1024];
+                            _ = await st.ReadAsync(buf, echoCts.Token);
+                            var resp = System.Text.Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Length: 7\r\nConnection: close\r\n\r\nPONG_OK");
+                            await st.WriteAsync(resp, echoCts.Token);
+                        }
+                        catch { break; }
+                    }
+                });
+
+                router.Start();
+                router.ApplySettings(new BrowserSettings { VpnEnabled = false, ProxyMode = ProxyMode.Direct });
+
+                using var handler = new System.Net.Http.SocketsHttpHandler
+                {
+                    Proxy = new System.Net.WebProxy($"http://127.0.0.1:{router.ListenPort}"),
+                    UseProxy = true
+                };
+                using var http = new System.Net.Http.HttpClient(handler) { Timeout = TimeSpan.FromSeconds(5) };
+                var body1 = http.GetStringAsync($"http://127.0.0.1:{echoPort}/ping1").GetAwaiter().GetResult();
+
+                router.ApplySettings(new BrowserSettings { VpnEnabled = true, ProxyMode = ProxyMode.Custom, CustomProxy = "socks5://127.0.0.1:40000" });
+                bool switchedSummaryOk = router.CurrentRouteSummary.Contains("SOCKS5", StringComparison.OrdinalIgnoreCase);
+
+                router.ApplySettings(new BrowserSettings { VpnEnabled = false, ProxyMode = ProxyMode.Direct });
+                var body2 = http.GetStringAsync($"http://127.0.0.1:{echoPort}/ping2").GetAwaiter().GetResult();
+
+                echoCts.Cancel();
+                Assert(router.IsRunning && router.ListenPort > 0 && body1 == "PONG_OK" && switchedSummaryOk && body2 == "PONG_OK",
+                    $"LocalVpnRouterService loopback proxy & live tunnel switching verified (port={router.ListenPort})");
+            }
+
+            dummyCtx.VpnRouter.Dispose();
         }
         catch (Exception ex)
         {
@@ -2535,17 +2605,22 @@ public sealed class MainForm : Form
             extDlg.Close();
         }
 
-        // Capture VpnPrivacyPopup preview
+        // Capture VpnPrivacyPopup preview with verified sample servers & live connected badge
+        bool prevVpn = ctx.Settings.VpnEnabled;
+        var prevMode = ctx.Settings.ProxyMode;
         using (var vpnPop = new VpnPrivacyPopup(main, ctx, palette, new Point(-31800, -31800), () => { }, () => { }, _u => { }, enableOutsideDismiss: false))
         {
             vpnPop.Location = new Point(-32000, -32000);
             vpnPop.Show();
+            vpnPop.PopulatePreviewSample();
             Application.DoEvents();
             using var bmp = new Bitmap(vpnPop.Width, vpnPop.Height);
             vpnPop.DrawToBitmap(bmp, new Rectangle(0, 0, vpnPop.Width, vpnPop.Height));
             bmp.Save(Path.Combine(outDir, "vpn_privacy_popup.png"), ImageFormat.Png);
             vpnPop.SafeClose();
         }
+        ctx.Settings.VpnEnabled = prevVpn;
+        ctx.Settings.ProxyMode = prevMode;
 
         // Capture History Panel preview with sample entries if empty
         bool addedSampleHist = false;
@@ -2599,5 +2674,6 @@ public sealed class MainForm : Form
         if (addedSampleBm) ctx.Bookmarks.Clear();
         ctx.Settings.ShowBookmarkBar = prevBmBar;
         main.Close();
+        ctx.VpnRouter.Dispose();
     }
 }

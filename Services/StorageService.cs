@@ -112,7 +112,7 @@ public sealed class StorageService
             s.DohProvider = DohProvider.Cloudflare;
         s.UseCloudflareDoH = false;
         s.VpnProfiles ??= new List<VpnProfile>();
-        s.Version = "4.3.0";
+        s.Version = "4.4.0";
         s.AutoSleepMinutes = Math.Clamp(s.AutoSleepMinutes, 1, 120);
         s.DeepUnloadMinutes = Math.Clamp(s.DeepUnloadMinutes, 2, 240);
         s.RendererProcessLimit = Math.Clamp(s.RendererProcessLimit, 1, 8);

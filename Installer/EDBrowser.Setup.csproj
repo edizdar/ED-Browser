@@ -6,13 +6,13 @@
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>ED.Browser.Setup.4.3.0</AssemblyName>
+    <AssemblyName>ED.Browser.Setup.4.4.0</AssemblyName>
     <RootNamespace>EDBrowser.Setup</RootNamespace>
     <Product>ED Browser Kurulum</Product>
-    <AssemblyTitle>ED Browser v4.3.0 Kurulum Sihirbazı</AssemblyTitle>
+    <AssemblyTitle>ED Browser v4.4.0 Kurulum Sihirbazı</AssemblyTitle>
     <Company>Erol Dizdar</Company>
-    <Version>4.3.0</Version>
-    <FileVersion>4.3.0.0</FileVersion>
+    <Version>4.4.0</Version>
+    <FileVersion>4.4.0.0</FileVersion>
     <ApplicationIcon>..\Assets\edbrowser.ico</ApplicationIcon>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
@@ -24,7 +24,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="..\Assets\edbrowser.ico" LogicalName="edbrowser.ico" />
-    <EmbeddedResource Include="..\publish\ED.Browser.4.3.0.Portable.exe" LogicalName="EDBrowser.Payload.exe" />
+    <EmbeddedResource Include="..\publish\ED.Browser.4.4.0.Portable.exe" LogicalName="EDBrowser.Payload.exe" />
   </ItemGroup>
 
 </Project>

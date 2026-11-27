@@ -35,6 +35,7 @@ public sealed class SettingsDialog : Form
     private readonly ComboBox _themeCombo;
 
     // Privacy & Network controls
+    private readonly ModernToggleSwitch _vpnEnabledToggle;
     private readonly ModernToggleSwitch _adToggle;
     private readonly ModernToggleSwitch _bmBarToggle;
     private readonly ModernToggleSwitch _httpsToggle;
@@ -182,6 +183,7 @@ public sealed class SettingsDialog : Form
         _themeCombo = CreateCombo(new[] { "Karanlık (Dark)", "Aydınlık (Light)" },
             s.Theme == BrowserTheme.Light ? 1 : 0);
 
+        _vpnEnabledToggle = CreateToggle(s.VpnEnabled);
         _adToggle = CreateToggle(s.AdBlockEnabled);
         _bmBarToggle = CreateToggle(s.ShowBookmarkBar);
         _httpsToggle = CreateToggle(s.HttpsOnlyMode);
@@ -202,7 +204,8 @@ public sealed class SettingsDialog : Form
             "Sistem Proxy (Windows)",
             "Özel Proxy / VPN (HTTP / SOCKS5)",
             "Tor Ağı (127.0.0.1:9050)",
-            "Cloudflare WARP Yerel Tüneli (127.0.0.1:40000)"
+            "Cloudflare WARP Yerel Tüneli (127.0.0.1:40000)",
+            "Ücretsiz Otomatik VPN Sunucusu (Anlık)"
         }, (int)s.ProxyMode);
         _customProxyBox = CreateTextBox(s.CustomProxy, "socks5://127.0.0.1:1080");
         _ipStatusLbl = new Label
@@ -496,6 +499,7 @@ public sealed class SettingsDialog : Form
         var sec = CreateSectionContainer("Gizlilik, VPN & Ağ", "İzleme engelleme, HTTPS-Only, WebRTC sızıntı koruması, şifreli DNS (DoH) ve VPN/Proxy tünelleri.");
 
         CreateCard(sec,
+            MakeSwitchRow("VPN Korumasını Etkinleştir (Anlık)", "Tüm web trafiğini yerel router üzerinden seçilen VPN tünelinden geçirir (yeniden başlatma gerekmez).", _vpnEnabledToggle),
             MakeSwitchRow("Reklam & İzleyici Engelleyici", $"150+ reklam ve takipçi ağını sayfa yüklenmeden keser (bu oturum: {_ctx.AdBlocker.TotalBlockedCount} engelleme).", _adToggle),
             MakeSwitchRow("HTTPS-Only (Otomatik HTTPS Yükseltme)", "HTTP bağlantıları mümkün olan tüm harici sitelerde otomatik olarak HTTPS'ye yükseltir.", _httpsToggle),
             MakeSwitchRow("URL İzleme Parametrelerini Temizle", "Bağlantılardaki utm_*, fbclid, gclid, igshid, msclkid gibi takip etiketlerini otomatik siler.", _stripToggle),
@@ -516,8 +520,11 @@ public sealed class SettingsDialog : Form
         {
             var probeSettings = new BrowserSettings
             {
-                ProxyMode = (ProxyMode)Math.Clamp(_proxyCombo.SelectedIndex, 0, 4),
+                VpnEnabled = _vpnEnabledToggle.Checked,
+                ProxyMode = (ProxyMode)Math.Clamp(_proxyCombo.SelectedIndex, 0, 5),
                 CustomProxy = _customProxyBox.Text.Trim(),
+                ActiveFreeServerUrl = _ctx.Settings.ActiveFreeServerUrl,
+                ActiveFreeServerCountry = _ctx.Settings.ActiveFreeServerCountry,
                 VpnProfiles = _ctx.Settings.VpnProfiles,
                 ActiveVpnProfileId = _ctx.Settings.ActiveVpnProfileId
             };
@@ -542,7 +549,7 @@ public sealed class SettingsDialog : Form
 
         CreateCard(sec,
             MakeFieldRow("DNS-over-HTTPS (Şifreli DNS — Yeniden başlatmada uygulanır)", "İSS ve yerel ağların DNS sorgularınızı görmesini engeller.", _dohCombo),
-            MakeFieldRow("VPN / Proxy Modu (Yeniden başlatmada uygulanır)", "Tüm WebView2 ağ trafiğini seçilen tünel (WARP, Tor veya Özel SOCKS5/HTTPS VPN) üzerinden geçirir.", _proxyCombo),
+            MakeFieldRow("VPN / Proxy Modu (Anlık uygulanır)", "Tüm WebView2 ağ trafiğini seçilen tünel (Ücretsiz Sunucu, WARP, Tor veya Özel VPN) üzerinden geçirir.", _proxyCombo),
             MakeFieldRow("Özel VPN / Proxy Adresi", "Örnek: socks5://127.0.0.1:1080 veya http://ip:port", _customProxyBox),
             testRow
         );
@@ -772,6 +779,7 @@ public sealed class SettingsDialog : Form
         s.HomePage = string.IsNullOrWhiteSpace(_homeBox.Text) ? "https://www.google.com" : _homeBox.Text.Trim();
         s.SearchEngine = Engines[Math.Max(0, _searchCombo.SelectedIndex)].Url;
         s.Theme = _themeCombo.SelectedIndex == 1 ? BrowserTheme.Light : BrowserTheme.Dark;
+        s.VpnEnabled = _vpnEnabledToggle.Checked;
         s.AdBlockEnabled = _adToggle.Checked;
         s.ShowBookmarkBar = _bmBarToggle.Checked;
         s.HttpsOnlyMode = _httpsToggle.Checked;
@@ -781,8 +789,9 @@ public sealed class SettingsDialog : Form
         s.SendGpcAndDnt = _fpToggle.Checked;
         s.ClearDataOnExit = _clearExitToggle.Checked;
         s.DohProvider = (DohProvider)Math.Clamp(_dohCombo.SelectedIndex, 0, 3);
-        s.ProxyMode = (ProxyMode)Math.Clamp(_proxyCombo.SelectedIndex, 0, 4);
+        s.ProxyMode = (ProxyMode)Math.Clamp(_proxyCombo.SelectedIndex, 0, 5);
         s.CustomProxy = _customProxyBox.Text.Trim();
+        _ctx.VpnRouter.ApplySettings(s);
         s.HardwareAcceleration = _hwaToggle.Checked;
         s.BackgroundTabThrottle = _bgtToggle.Checked;
         s.LoadImages = _imgToggle.Checked;

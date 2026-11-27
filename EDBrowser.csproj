@@ -6,16 +6,16 @@
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>ED.Browser.4.3.0.Portable</AssemblyName>
+    <AssemblyName>ED.Browser.4.4.0.Portable</AssemblyName>
     <RootNamespace>EDBrowser</RootNamespace>
     <Product>ED Browser</Product>
     <AssemblyTitle>ED Browser</AssemblyTitle>
     <Company>Erol Dizdar</Company>
     <Authors>Erol Dizdar</Authors>
     <Description>ED Browser v4 - Ultra hafif WebView2 tabanlı masaüstü web tarayıcısı</Description>
-    <Version>4.3.0</Version>
-    <FileVersion>4.3.0.0</FileVersion>
-    <AssemblyVersion>4.3.0.0</AssemblyVersion>
+    <Version>4.4.0</Version>
+    <FileVersion>4.4.0.0</FileVersion>
+    <AssemblyVersion>4.4.0.0</AssemblyVersion>
     <ApplicationIcon>Assets\edbrowser.ico</ApplicationIcon>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
