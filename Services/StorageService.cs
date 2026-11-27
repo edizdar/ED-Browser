@@ -108,7 +108,11 @@ public sealed class StorageService
     public BrowserSettings LoadSettings()
     {
         var s = LoadJson(SettingsPath, new BrowserSettings());
-        s.Version = "4.2.0";
+        if (s.UseCloudflareDoH && s.DohProvider == DohProvider.Off)
+            s.DohProvider = DohProvider.Cloudflare;
+        s.UseCloudflareDoH = false;
+        s.VpnProfiles ??= new List<VpnProfile>();
+        s.Version = "4.3.0";
         s.AutoSleepMinutes = Math.Clamp(s.AutoSleepMinutes, 1, 120);
         s.DeepUnloadMinutes = Math.Clamp(s.DeepUnloadMinutes, 2, 240);
         s.RendererProcessLimit = Math.Clamp(s.RendererProcessLimit, 1, 8);

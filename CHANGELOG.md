@@ -2,6 +2,20 @@
 
 ---
 
+## v4.3.0 — VPN Tünel Merkezi, Kapsamlı Gizlilik Kalkanı & Şeffaflık Raporu
+- 🔐 **Opera/Brave Tarzı VPN & Gizlilik Kalkanı (`VPN` Omnibox Rozeti):**
+  - **4 Tünel Modu:** Doğrudan, Sistem Proxy, **Özel VPN / SOCKS5 / HTTPS Profilleri** (kullanıcı adı/şifre desteği dahil), **Tor Ağı (`127.0.0.1:9050` / `9150`)** ve **Cloudflare WARP (`127.0.0.1:40000`)**.
+  - Yerel WARP/Tor portlarının açık olup olmadığını otomatik algılama, çıkış IP & ülke doğrulama (`FetchTraceAsync`), ve `Chrome Web Store` VPN eklentilerine hızlı erişim.
+- 🛡️ **Gelişmiş Gizlilik Sertleştirme:**
+  - **HTTPS-Only Modu:** Harici `http://` bağlantıları otomatik `https://` yapar (SSL desteklemeyen adreslerde güvenli geri dönüş korumalı).
+  - **URL İzleme Parametre Temizleyici:** `utm_*`, `fbclid`, `gclid`, `dclid`, `yclid`, `msclkid`, `mc_cid`, `mc_eid`, `igshid`, `si`, `mkt_tok` parametrelerini otomatik kırpar.
+  - **WebRTC Yerel IP Sızıntı Koruması:** `--force-webrtc-ip-handling-policy=disable_non_proxied_udp` + `--enforce-webrtc-ip-permission-check`.
+  - **Parmak İzi & GPC/DNT Koruması:** Tüm isteklerde `DNT: 1` / `Sec-GPC: 1` başlıkları, `getBattery()` engelleme.
+  - **Çoklu Şifreli DNS (DoH):** Cloudflare (`1.1.1.1`), Quad9 (`9.9.9.9`), AdGuard DNS veya Sistem DNS.
+  - **Çıkışta Gezinme Geçmişini Otomatik Temizleme** seçeneği + tam şeffaflık için [PRIVACY.md](PRIVACY.md).
+
+---
+
 ## v4.2.0 — Gerçek CDP DevTools, Chrome/Edge Eklenti Mağazası, 6 Tarayıcı UX Standartları & Sürükle-Bırak Yenilemesi
 - 🛠️ **Gerçek Chrome Tarzı Geliştirici Araçları (`F12` / `Ctrl+Shift+I` / Sağ Tık → İncele):**
   - Eski OS pencere bindirme (HWND overlay) yaklaşımı tamamen kaldırıldı; `CoreWebView2` Chrome DevTools Protocol (CDP) kullanan yerleşik `DevToolsPanel` oluşturuldu.

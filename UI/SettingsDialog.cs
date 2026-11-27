@@ -37,7 +37,12 @@ public sealed class SettingsDialog : Form
     // Privacy & Network controls
     private readonly ModernToggleSwitch _adToggle;
     private readonly ModernToggleSwitch _bmBarToggle;
-    private readonly ModernToggleSwitch _dohToggle;
+    private readonly ModernToggleSwitch _httpsToggle;
+    private readonly ModernToggleSwitch _stripToggle;
+    private readonly ModernToggleSwitch _webrtcToggle;
+    private readonly ModernToggleSwitch _fpToggle;
+    private readonly ModernToggleSwitch _clearExitToggle;
+    private readonly ComboBox _dohCombo;
     private readonly ComboBox _proxyCombo;
     private readonly RoundedTextBox _customProxyBox;
     private readonly Label _ipStatusLbl;
@@ -62,7 +67,7 @@ public sealed class SettingsDialog : Form
 
         AutoScaleMode = AutoScaleMode.Dpi;
         AutoScaleDimensions = new SizeF(96F, 96F);
-        Text = "Ayarlar — ED Browser v4.1.0";
+        Text = $"Ayarlar — ED Browser v{_ctx.Settings.Version}";
         Size = new Size(920, 720);
         MinimumSize = new Size(760, 520);
         StartPosition = FormStartPosition.CenterParent;
@@ -179,13 +184,25 @@ public sealed class SettingsDialog : Form
 
         _adToggle = CreateToggle(s.AdBlockEnabled);
         _bmBarToggle = CreateToggle(s.ShowBookmarkBar);
-        _dohToggle = CreateToggle(s.UseCloudflareDoH);
+        _httpsToggle = CreateToggle(s.HttpsOnlyMode);
+        _stripToggle = CreateToggle(s.StripTrackingParams);
+        _webrtcToggle = CreateToggle(s.WebRtcLeakProtection);
+        _fpToggle = CreateToggle(s.FingerprintProtection);
+        _clearExitToggle = CreateToggle(s.ClearDataOnExit);
+        _dohCombo = CreateCombo(new[]
+        {
+            "Kapalı (Sistem DNS)",
+            "Cloudflare (1.1.1.1)",
+            "Quad9 Güvenli (9.9.9.9)",
+            "AdGuard DNS (Reklam & İzleyici Filtreli)"
+        }, (int)s.DohProvider);
         _proxyCombo = CreateCombo(new[]
         {
             "Doğrudan (Direct)",
             "Sistem Proxy (Windows)",
-            "Özel Proxy (HTTP / SOCKS5)",
-            "Tor Ağı (127.0.0.1:9050)"
+            "Özel Proxy / VPN (HTTP / SOCKS5)",
+            "Tor Ağı (127.0.0.1:9050)",
+            "Cloudflare WARP Yerel Tüneli (127.0.0.1:40000)"
         }, (int)s.ProxyMode);
         _customProxyBox = CreateTextBox(s.CustomProxy, "socks5://127.0.0.1:1080");
         _ipStatusLbl = new Label
@@ -476,10 +493,15 @@ public sealed class SettingsDialog : Form
 
     private Panel BuildPrivacySection()
     {
-        var sec = CreateSectionContainer("Gizlilik & Ağ", "Reklam engelleme, yer imi çubuğu, Cloudflare DoH ve proxy ayarları.");
+        var sec = CreateSectionContainer("Gizlilik, VPN & Ağ", "İzleme engelleme, HTTPS-Only, WebRTC sızıntı koruması, şifreli DNS (DoH) ve VPN/Proxy tünelleri.");
 
         CreateCard(sec,
             MakeSwitchRow("Reklam & İzleyici Engelleyici", $"150+ reklam ve takipçi ağını sayfa yüklenmeden keser (bu oturum: {_ctx.AdBlocker.TotalBlockedCount} engelleme).", _adToggle),
+            MakeSwitchRow("HTTPS-Only (Otomatik HTTPS Yükseltme)", "HTTP bağlantıları mümkün olan tüm harici sitelerde otomatik olarak HTTPS'ye yükseltir.", _httpsToggle),
+            MakeSwitchRow("URL İzleme Parametrelerini Temizle", "Bağlantılardaki utm_*, fbclid, gclid, igshid, msclkid gibi takip etiketlerini otomatik siler.", _stripToggle),
+            MakeSwitchRow("WebRTC Yerel IP Sızıntı Koruması", "VPN veya proxy kullanırken yerel ağ IP adresinizin WebRTC üzerinden sızmasını engeller (yeniden başlatmada uygulanır).", _webrtcToggle),
+            MakeSwitchRow("Parmak İzi & GPC/DNT Koruması", "Tarayıcılara 'Beni İzleme (DNT / Sec-GPC)' başlığı gönderir ve batarya/donanım parmak izi yüzeyini azaltır.", _fpToggle),
+            MakeSwitchRow("Çıkışta Gezinme Geçmişini Temizle", "Tarayıcı kapatıldığında gezinme geçmişi ve geçici önbelleği otomatik temizler.", _clearExitToggle),
             MakeSwitchRow("Yer İmi Çubuğunu Göster", "Üst araç çubuğunun hemen altında hızlı yer imi çubuğunu gösterir (Ctrl+Shift+B).", _bmBarToggle)
         );
 
@@ -492,10 +514,17 @@ public sealed class SettingsDialog : Form
         testBtn.ApplyTheme(_p);
         testBtn.Click += async (_, _) =>
         {
+            var probeSettings = new BrowserSettings
+            {
+                ProxyMode = (ProxyMode)Math.Clamp(_proxyCombo.SelectedIndex, 0, 4),
+                CustomProxy = _customProxyBox.Text.Trim(),
+                VpnProfiles = _ctx.Settings.VpnProfiles,
+                ActiveVpnProfileId = _ctx.Settings.ActiveVpnProfileId
+            };
             _ipStatusLbl.Text = "Test ediliyor…";
-            var info = await ProxyService.FetchTraceAsync();
+            var info = await ProxyService.FetchTraceAsync(probeSettings);
             _ipStatusLbl.Text = info.Success
-                ? $"IP: {info.Ip}  •  Konum: {info.Location}"
+                ? $"IP: {info.Ip}  •  Konum: {info.Location} ({info.TunnelLabel})"
                 : "Bağlantı testi başarısız oldu.";
         };
 
@@ -512,9 +541,9 @@ public sealed class SettingsDialog : Form
         testRow.Controls.Add(_ipStatusLbl);
 
         CreateCard(sec,
-            MakeSwitchRow("Cloudflare DNS-over-HTTPS (1.1.1.1)", "DNS sorgularını şifreler (yeniden başlatmada uygulanır).", _dohToggle),
-            MakeFieldRow("Proxy Modu (Yeniden başlatmada uygulanır)", "Tüm WebView2 ağ trafiğini seçilen proxy üzerinden geçirir.", _proxyCombo),
-            MakeFieldRow("Özel Proxy Adresi", "Örnek: socks5://127.0.0.1:1080 veya http://ip:port", _customProxyBox),
+            MakeFieldRow("DNS-over-HTTPS (Şifreli DNS — Yeniden başlatmada uygulanır)", "İSS ve yerel ağların DNS sorgularınızı görmesini engeller.", _dohCombo),
+            MakeFieldRow("VPN / Proxy Modu (Yeniden başlatmada uygulanır)", "Tüm WebView2 ağ trafiğini seçilen tünel (WARP, Tor veya Özel SOCKS5/HTTPS VPN) üzerinden geçirir.", _proxyCombo),
+            MakeFieldRow("Özel VPN / Proxy Adresi", "Örnek: socks5://127.0.0.1:1080 veya http://ip:port", _customProxyBox),
             testRow
         );
         return sec;
@@ -745,8 +774,14 @@ public sealed class SettingsDialog : Form
         s.Theme = _themeCombo.SelectedIndex == 1 ? BrowserTheme.Light : BrowserTheme.Dark;
         s.AdBlockEnabled = _adToggle.Checked;
         s.ShowBookmarkBar = _bmBarToggle.Checked;
-        s.UseCloudflareDoH = _dohToggle.Checked;
-        s.ProxyMode = (ProxyMode)Math.Clamp(_proxyCombo.SelectedIndex, 0, 3);
+        s.HttpsOnlyMode = _httpsToggle.Checked;
+        s.StripTrackingParams = _stripToggle.Checked;
+        s.WebRtcLeakProtection = _webrtcToggle.Checked;
+        s.FingerprintProtection = _fpToggle.Checked;
+        s.SendGpcAndDnt = _fpToggle.Checked;
+        s.ClearDataOnExit = _clearExitToggle.Checked;
+        s.DohProvider = (DohProvider)Math.Clamp(_dohCombo.SelectedIndex, 0, 3);
+        s.ProxyMode = (ProxyMode)Math.Clamp(_proxyCombo.SelectedIndex, 0, 4);
         s.CustomProxy = _customProxyBox.Text.Trim();
         s.HardwareAcceleration = _hwaToggle.Checked;
         s.BackgroundTabThrottle = _bgtToggle.Checked;

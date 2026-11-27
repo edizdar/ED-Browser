@@ -1,9 +1,10 @@
-# 🌐 ED Browser v4.2.0
+# 🌐 ED Browser v4.3.0
 
-> Reklam yok, izleme yok, gereksiz RAM tüketimi yok. **Chromium (Edge WebView2)** motoruyla tam web uyumlu, **Chrome Web Store & Microsoft Edge Add-ons** eklenti desteği sunan, yerel **WinForms GDI+** arayüzü sayesinde ultra hafif ve tamamen açık kaynak Windows masaüstü tarayıcısı.
+> Reklam yok, izleme yok, telemetri yok, gereksiz RAM tüketimi yok. **Chromium (Edge WebView2)** motoruyla tam web uyumlu, **VPN/Proxy Tünel Merkezi**, **HTTPS-Only / WebRTC / DoH Gizlilik Kalkanı**, **Chrome Web Store & Microsoft Edge Add-ons** eklenti desteği sunan, yerel **WinForms GDI+** arayüzlü açık kaynak Windows masaüstü tarayıcısı.
 
-[![Sürüm](https://img.shields.io/badge/S%C3%BCr%C3%BCm-v4.2.0-38bdf8?style=flat-square)](https://github.com/edizdar/ED-Browser/releases/latest)
+[![Sürüm](https://img.shields.io/badge/S%C3%BCr%C3%BCm-v4.3.0-38bdf8?style=flat-square)](https://github.com/edizdar/ED-Browser/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11%20(x64)-818cf8?style=flat-square)](https://github.com/edizdar/ED-Browser/releases)
+[![Gizlilik](https://img.shields.io/badge/Telemetri-S%C4%B1f%C4%B1r%20(PRIVACY.md)-34d399?style=flat-square)](PRIVACY.md)
 [![Lisans](https://img.shields.io/badge/Lisans-MIT-34d399?style=flat-square)](LICENSE)
 
 ---
@@ -14,8 +15,8 @@
 
 | Sürüm | Dosya | Boyut | Açıklama |
 | :--- | :--- | :--- | :--- |
-| 🛠️ **Kurulum Sürümü (Önerilen)** | `ED.Browser.Setup.4.2.0.exe` | **~2,01 MB** | Kurulum sihirbazı, Masaüstü & Başlat Menüsü kısayolları, Windows Programlar listesi ve `Uninstall.exe` içerir. Profil verileri `%LOCALAPPDATA%\EDBrowser4` altında saklanır. |
-| 🎒 **Taşınabilir (Portable) Sürüm** | `ED.Browser.4.2.0.Portable.exe` | **~1,79 MB** | Kurulum gerektirmez, USB veya herhangi bir klasörden çalışır. Tüm veriler yanındaki `EDBrowserData` klasöründe tutulur. |
+| 🛠️ **Kurulum Sürümü (Önerilen)** | `ED.Browser.Setup.4.3.0.exe` | **~2,04 MB** | Kurulum sihirbazı, Masaüstü & Başlat Menüsü kısayolları, Windows Programlar listesi ve `Uninstall.exe` içerir. Profil verileri `%LOCALAPPDATA%\EDBrowser4` altında saklanır. |
+| 🎒 **Taşınabilir (Portable) Sürüm** | `ED.Browser.4.3.0.Portable.exe` | **~1,81 MB** | Kurulum gerektirmez, USB veya herhangi bir klasörden çalışır. Tüm veriler yanındaki `EDBrowserData` klasöründe tutulur. |
 
 > **Önkoşul:** Windows 10/11'de yerleşik **Microsoft Edge WebView2** ve **.NET 10 Desktop Runtime (x64)** kullanır.
 
@@ -28,10 +29,10 @@ Adres çubuğu yanında canlı **`− %100 +` Yakınlaştırma**, **`⚡ RAM`**,
 
 ![ED Browser Ana Ekran](docs/screenshots/main_dark.png)
 
-### Modern `⋮` Uygulama Menüsü & Chrome Tarzı Sabitlenmiş Geliştirici Araçları
-| Modern `⋮` Menüsü (Otomatik Kapanan) | Chrome Tarzı CDP DevTools (Sağ / Alt / Ayrı Pencere) |
-| :---: | :---: |
-| ![Modern Menü](docs/screenshots/app_menu.png) | ![Docked DevTools](docs/screenshots/devtools_docked.png) |
+### VPN & Gizlilik Kalkanı + Modern `⋮` Menü + CDP Geliştirici Araçları
+| VPN & Gizlilik Kalkanı | Modern `⋮` Menüsü (Otomatik Kapanan) | Chrome Tarzı CDP DevTools |
+| :---: | :---: | :---: |
+| ![VPN ve Gizlilik](docs/screenshots/vpn_privacy_popup.png) | ![Modern Menü](docs/screenshots/app_menu.png) | ![Docked DevTools](docs/screenshots/devtools_docked.png) |
 
 ### Eklenti Mağazası & Tarama Verilerini Temizle
 | Chromium Eklenti Mağazası (Chrome Web Store + Edge Add-ons + CRX) | Tarama Verilerini Temizle |
@@ -52,15 +53,16 @@ Adres çubuğu yanında canlı **`− %100 +` Yakınlaştırma**, **`⚡ RAM`**,
 
 ---
 
-## ⚡ v3.1.8 (Electron) vs v4.2.0 (WinForms + WebView2) Karşılaştırması
+## ⚡ v3.1.8 (Electron) vs v4.3.0 (WinForms + WebView2) Karşılaştırması
 
-| Ölçüt | ED Browser v3.1.8 (Electron) | ED Browser v4.2.0 (WinForms + WebView2) |
+| Ölçüt | ED Browser v3.1.8 (Electron) | ED Browser v4.3.0 (WinForms + WebView2) |
 | :--- | :--- | :--- |
-| **Taşınabilir `.exe` Boyutu** | 72,67 MB | **1,79 MB** (**%97,5 daha küçük**) |
-| **Kurulum `.exe` Boyutu** | 73,00 MB | **2,01 MB** (**%97,2 daha küçük**) |
+| **Taşınabilir `.exe` Boyutu** | 72,67 MB | **~1,81 MB** (**%97,5 daha küçük**) |
+| **Kurulum `.exe` Boyutu** | 73,00 MB | **~2,04 MB** (**%97,2 daha küçük**) |
 | **Çalıştırılınca Açılan Disk Alanı** | 251,72 MB | **~1,8–2,0 MB** (sistem WebView2 paylaşılır) |
 | **Arayüz Motoru** | Ekstra Chromium Renderer süreci | **Saf yerel WinForms GDI+** (0 ekstra renderer) |
 | **Pasif Sekme Bellek Yönetimi** | Yalnızca JS zamanlayıcı kısma | **`MemoryUsageTargetLevel.Low` + `TrySuspendAsync()` + Derin Boşaltma (`0 MB`)** |
+| **VPN & Gizlilik Kalkanı** | Yalnızca temel proxy/DoH | **WARP / Tor / Özel SOCKS5-HTTPS VPN Profilleri + HTTPS-Only + WebRTC Sızıntı Koruması + URL İzleme Temizleyici + Multi-DoH + GPC/DNT ([PRIVACY.md](PRIVACY.md))** |
 | **Geliştirici Araçları** | Kısıtlı harici pencere | **CDP Tabanlı Gömülü DevTools (Öğeler, Konsol REPL, Ağ, Depo, Kaynak, Öğe Seçici, Cihaz Emülasyonu)** |
 | **Eklenti Mağazası** | Yok | **Chrome Web Store + Microsoft Edge Add-ons + `.crx`/`.zip`/Klasör** |
 | **Şifre Kasası Güvenliği** | Sabit anahtarlı AES-256-CBC | **AES-256-GCM + Windows DPAPI** (kullanıcıya özel anahtar) |
@@ -71,14 +73,17 @@ Adres çubuğu yanında canlı **`− %100 +` Yakınlaştırma**, **`⚡ RAM`**,
 
 ## ✨ Öne Çıkan Özellikler
 
+- **VPN Tünel Merkezi (`VPN` Omnibox Rozeti):**
+  - **Cloudflare WARP (`127.0.0.1:40000`)**, **Tor Ağı (`127.0.0.1:9050` / `9150`)** ve kullanıcı adı/şifre destekli kayıtlı **Özel VPN / SOCKS5 / HTTPS Profilleri**; canlı yerel tünel port algılama, çıkış IP testi ve tek tık **VPN Eklentisi Kur** kısayolu.
+- **Kapsamlı Gizlilik Kalkanı ([PRIVACY.md](PRIVACY.md)):**
+  - **HTTPS-Only** (otomatik HTTPS yükseltme), **URL İzleme Parametre Temizleyici** (`utm_*`, `fbclid`, `gclid`, `igshid`, `msclkid`), **WebRTC Yerel IP Sızıntı Koruması**, **Parmak İzi + `DNT`/`Sec-GPC`**, **Çoklu Şifreli DNS (Cloudflare / Quad9 / AdGuard DoH)** ve sıfır telemetri.
 - **Agresif RAM Optimizasyonu:** Arka plan sekmelerinde düşük bellek modu, otomatik `TrySuspendAsync()` sekme uyutma (`💤`), derin bellek boşaltma (`❄️`) ve araç çubuğundan canlı `⚡ XX MB` ile tek tıkla temizleme.
 - **Gerçek Chrome Tarzı Geliştirici Araçları (`F12` / `Ctrl+Shift+I` / Sağ Tık → İncele):**
   - Sağa veya alta sabitlenebilen gerçek CDP tabanlı panel: **Öğeler** (canlı stil editörü), **Konsol + JS REPL**, **Ağ**, **Depo** (Çerezler / LocalStorage / SessionStorage), **Kaynak**, **Sayfadan Öğe Seçici (`Ctrl+Shift+C`)** ve **Mobil/Tablet Cihaz Emülasyonu**; dilersen tek tıkla Tam Chromium DevTools penceresi.
 - **Chromium Eklenti Desteği (`Ctrl+Shift+E`):**
   - **Chrome Web Store** ve **Microsoft Edge Add-ons** eklentilerini URL/ID ile veya mağaza sayfasındayken üstte açılan tek tık **`ED Browser'a Ekle`** çubuğuyla indirip CRX3 paketini açarak doğrudan WebView2 profiline yükler; `.crx`/`.zip` ve açık klasör yüklemeyi destekler.
-- **Doğrudan Araç Çubuğu & Modern `⋮` Menü (`Alt + Sol Kenar Çubuğu`):**
-  - Adres çubuğu yanında **`− %100 +` Yakınlaştırma**, **Ekran Görüntüsü**, **Tam Ekran**, **Eklentiler** ve isteğe bağlı Opera/Yandex tarzı **Sol Kenar Çubuğu (`Ctrl+Shift+L`)**.
-  - Web sayfasına tıklandığında anında kapanan DWM yuvarlatılmış **`⋮` Uygulama Menüsü**: Kapalı Sekmeyi Yeniden Aç (`Ctrl+Shift+T`), Sekme Sabitleme/Ses Kapatma, PDF/Sayfa Kaydetme, Sayfa Kaynağı (`Ctrl+U`), Tarama Verilerini Temizle (`Ctrl+Shift+Del`), Hızlı Tema/Reklam Engelleyici.
+- **Doğrudan Araç Çubuğu & Modern `⋮` Menü + Sol Kenar Çubuğu (`Ctrl+Shift+L`):**
+  - Adres çubuğu yanında **`VPN`** rozeti ve **`− %100 +` Yakınlaştırma**, araç çubuğunda **Ekran Görüntüsü**, **Tam Ekran**, **Eklentiler**, WebView2 üzerinde otomatik kapanan yuvarlatılmış **`⋮` Menü** ve isteğe bağlı Opera/Yandex tarzı **Sol Kenar Çubuğu**.
 - **Sorunsuz Sürükle-Bırak Yer İmleri:**
   - Yer imi çubuğunda doğrudan fare yakalamalı sürükleme: cam hayalet kapsül, parlak ekleme çizgisi ve klasörlerin ortasına bırakınca otomatik klasör içi taşıma; taşan öğeler için `»` menüsü.
 

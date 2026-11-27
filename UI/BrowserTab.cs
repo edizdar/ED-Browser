@@ -34,6 +34,8 @@ public sealed class BrowserTab : IDisposable
     private readonly string? _incognitoDir;
     private string? _pendingUrl;
     private string _topHost = string.Empty;
+    private readonly HashSet<string> _httpsFailedHosts = new(StringComparer.OrdinalIgnoreCase);
+    private string? _lastUpgradedFromHttpUrl;
     private bool _disposed;
 
     public event Action<BrowserTab>? StateChanged;
@@ -155,6 +157,7 @@ public sealed class BrowserTab : IDisposable
             core.DownloadStarting += OnDownloadStarting;
             core.ContextMenuRequested += OnContextMenuRequested;
             core.WebMessageReceived += OnWebMessageReceived;
+            core.BasicAuthenticationRequested += OnBasicAuthRequested;
             core.IsDocumentPlayingAudioChanged += (_, _) => StateChanged?.Invoke(this);
             core.IsMutedChanged += (_, _) => StateChanged?.Invoke(this);
             wv.ZoomFactorChanged += (_, _) =>
@@ -188,6 +191,23 @@ public sealed class BrowserTab : IDisposable
                 ");
             }
 
+            if (_ctx.Settings.FingerprintProtection)
+            {
+                await core.AddScriptToExecuteOnDocumentCreatedAsync(@"
+                    (function(){
+                        try {
+                            Object.defineProperty(Navigator.prototype, 'globalPrivacyControl', { get: () => true, configurable: true });
+                            Object.defineProperty(Navigator.prototype, 'doNotTrack', { get: () => '1', configurable: true });
+                            if (navigator.getBattery) {
+                                Navigator.prototype.getBattery = () => Promise.reject(new DOMException('Disabled for privacy', 'NotAllowedError'));
+                            }
+                            Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => 4, configurable: true });
+                            Object.defineProperty(Navigator.prototype, 'deviceMemory', { get: () => 8, configurable: true });
+                        } catch(_) {}
+                    })();
+                ");
+            }
+
             IsInitialized = true;
             wv.ZoomFactor = ZoomFactor;
 
@@ -214,9 +234,29 @@ public sealed class BrowserTab : IDisposable
         }
     }
 
+    private void OnBasicAuthRequested(object? sender, CoreWebView2BasicAuthenticationRequestedEventArgs e)
+    {
+        var prof = ProxyService.GetActiveVpnProfile(_ctx.Settings);
+        if (_ctx.Settings.ProxyMode == ProxyMode.Custom && prof is not null && !string.IsNullOrEmpty(prof.Username))
+        {
+            e.Response.UserName = prof.Username;
+            e.Response.Password = prof.Password;
+        }
+    }
+
     private void OnWebResourceRequested(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
     {
         var reqUrl = e.Request.Uri;
+
+        if (_ctx.Settings.SendGpcAndDnt)
+        {
+            try
+            {
+                e.Request.Headers.SetHeader("DNT", "1");
+                e.Request.Headers.SetHeader("Sec-GPC", "1");
+            }
+            catch { }
+        }
 
         if (_ctx.Settings.AdBlockEnabled && _ctx.AdBlocker.ShouldBlock(reqUrl, _topHost))
         {
@@ -236,18 +276,62 @@ public sealed class BrowserTab : IDisposable
 
     private void OnNavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs e)
     {
+        if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var rawUri))
+        {
+            if (_ctx.Settings.HttpsOnlyMode &&
+                rawUri.Scheme == Uri.UriSchemeHttp &&
+                !_httpsFailedHosts.Contains(rawUri.Host) &&
+                ProxyService.TryUpgradeToHttps(e.Uri, out var httpsUri))
+            {
+                _lastUpgradedFromHttpUrl = e.Uri;
+                e.Cancel = true;
+                WebView?.CoreWebView2?.Navigate(httpsUri);
+                return;
+            }
+
+            if (_ctx.Settings.StripTrackingParams)
+            {
+                var cleaned = ProxyService.CleanTrackingParameters(e.Uri);
+                if (!string.Equals(cleaned, e.Uri, StringComparison.Ordinal))
+                {
+                    e.Cancel = true;
+                    WebView?.CoreWebView2?.Navigate(cleaned);
+                    return;
+                }
+            }
+
+            _topHost = rawUri.Host;
+        }
+
         IsLoading = true;
         IsSleeping = false;
         BlockedOnTab = 0;
         Url = e.Uri;
-        if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri))
-            _topHost = uri.Host;
         StateChanged?.Invoke(this);
     }
 
     private void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
         IsLoading = false;
+        if (!e.IsSuccess && !string.IsNullOrEmpty(_lastUpgradedFromHttpUrl) &&
+            Uri.TryCreate(Url, UriKind.Absolute, out var curUri) &&
+            curUri.Scheme == Uri.UriSchemeHttps &&
+            e.WebErrorStatus is CoreWebView2WebErrorStatus.CertificateCommonNameIsIncorrect
+                or CoreWebView2WebErrorStatus.CertificateExpired
+                or CoreWebView2WebErrorStatus.CertificateRevoked
+                or CoreWebView2WebErrorStatus.CertificateIsInvalid
+                or CoreWebView2WebErrorStatus.CannotConnect
+                or CoreWebView2WebErrorStatus.ConnectionAborted
+                or CoreWebView2WebErrorStatus.ConnectionReset)
+        {
+            _httpsFailedHosts.Add(curUri.Host);
+            var fallbackHttp = _lastUpgradedFromHttpUrl;
+            _lastUpgradedFromHttpUrl = null;
+            WebView?.CoreWebView2?.Navigate(fallbackHttp);
+            return;
+        }
+        _lastUpgradedFromHttpUrl = null;
+
         if (WebView?.CoreWebView2 is not null)
         {
             Url = WebView.CoreWebView2.Source;

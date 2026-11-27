@@ -73,9 +73,15 @@ public sealed class BrowserContext
             "--disable-domain-reliability",
             "--disable-breakpad",
             "--no-first-run",
-            "--disable-features=Translate,OptimizationHints,MediaRouter,msEdgeShoppingAssist",
+            "--disable-features=Translate,OptimizationHints,MediaRouter,msEdgeShoppingAssist,msEdgeTelemetry",
             "--js-flags=--max-old-space-size=256"
         };
+
+        if (s.WebRtcLeakProtection)
+        {
+            args.Add("--force-webrtc-ip-handling-policy=disable_non_proxied_udp");
+            args.Add("--enforce-webrtc-ip-permission-check");
+        }
 
         if (!s.HardwareAcceleration)
             args.Add("--disable-gpu");

@@ -32,6 +32,7 @@ public sealed class MainForm : Form
 
     private readonly Panel _omnibox;
     private readonly IconButton _secBtn;
+    private readonly IconButton _vpnBtn;
     private readonly TextBox _urlBox;
     private readonly IconButton _adShieldBtn;
     private readonly IconButton _bmStarBtn;
@@ -92,6 +93,7 @@ public sealed class MainForm : Form
     private ContextMenuStrip? _activeBookmarkMenu;
     private Rectangle _activeBookmarkAnchorRect;
     private AppMenuPopup? _activeAppMenu;
+    private VpnPrivacyPopup? _activeVpnPopup;
 
     private bool _isFullscreen;
     private FormWindowState _preFsState;
@@ -207,6 +209,19 @@ public sealed class MainForm : Form
         };
         _secBtn.SetTooltip("Bağlantı Güvenliği");
 
+        _vpnBtn = new IconButton
+        {
+            IconType = VectorIcon.None,
+            LabelText = "VPN",
+            Dock = DockStyle.Left,
+            Size = new Size(52, 30),
+            CornerRadius = 12,
+            Font = new Font("Segoe UI", 7.75f, FontStyle.Bold),
+            Margin = new Padding(2, 0, 2, 0)
+        };
+        _vpnBtn.SetTooltip("VPN, Proxy, DoH ve Gizlilik Kalkanı");
+        _vpnBtn.Click += (_, _) => ShowVpnPrivacyPopup();
+
         _urlBox = new TextBox
         {
             BorderStyle = BorderStyle.None,
@@ -260,6 +275,7 @@ public sealed class MainForm : Form
         _bmStarBtn.Click += (_, _) => ToggleCurrentBookmark();
 
         _omnibox.Controls.Add(_urlBox);
+        _omnibox.Controls.Add(_vpnBtn);
         _omnibox.Controls.Add(_secBtn);
         _omnibox.Controls.Add(_adShieldBtn);
         _omnibox.Controls.Add(_bmStarBtn);
@@ -709,7 +725,7 @@ public sealed class MainForm : Form
 
     private void LayoutOmniboxText()
     {
-        int left = _secBtn.Right + 4;
+        int left = _vpnBtn.Right + 6;
         int right = _adShieldBtn.Left - 4;
         int h = _urlBox.PreferredHeight;
         _urlBox.Location = new Point(left, Math.Max(2, (_omnibox.Height - h) / 2));
@@ -836,6 +852,7 @@ public sealed class MainForm : Form
         ViewPageSource = () => _ = ViewPageSourceAsync(),
         TakeScreenshot = ShowScreenshotMenu,
         ClearBrowsingData = OpenClearBrowsingDataDialog,
+        OpenVpnPopup = ShowVpnPrivacyPopup,
         OptimizeRam = () => _ = OptimizeRamNowAsync(),
         ImportData = OpenImportDialog,
         ToggleDevTools = () => _ = ToggleDevToolsAsync(),
@@ -1061,6 +1078,75 @@ public sealed class MainForm : Form
         _adShieldBtn.SetTooltip(enabled
             ? $"Reklam Engelleyici Aktif (Bu sekme: {_activeTab?.BlockedOnTab ?? 0} | Toplam: {_ctx.AdBlocker.TotalBlockedCount}) — Tıkla kapat"
             : "Reklam Engelleyici Kapalı — Tıkla aç");
+        UpdateVpnBadge();
+    }
+
+    private void UpdateVpnBadge()
+    {
+        var mode = _ctx.Settings.ProxyMode;
+        bool tunnelActive = mode is ProxyMode.CloudflareWarp or ProxyMode.Tor or ProxyMode.Custom;
+        _vpnBtn.LabelText = mode switch
+        {
+            ProxyMode.Tor => "TOR",
+            ProxyMode.CloudflareWarp => "WARP",
+            ProxyMode.Custom => "VPN ✓",
+            _ => "VPN"
+        };
+        _vpnBtn.NormalBg = tunnelActive ? Color.FromArgb(35, _palette.Green) : _palette.ElevatedBg;
+        _vpnBtn.HoverBg = _palette.HoverBg;
+        _vpnBtn.IconColor = tunnelActive ? _palette.Green : _palette.TextMuted;
+        _vpnBtn.BorderColor = tunnelActive ? _palette.Green : _palette.Border;
+        _vpnBtn.SetTooltip(tunnelActive
+            ? $"Aktif Tünel: {_vpnBtn.LabelText} • DoH: {_ctx.Settings.DohProvider}\nTıkla: VPN & Gizlilik Kalkanı"
+            : $"VPN / Proxy: {_ctx.Settings.ProxyMode} • DoH: {_ctx.Settings.DohProvider}\nTıkla: VPN & Gizlilik Kalkanı");
+    }
+
+    private void ShowVpnPrivacyPopup()
+    {
+        if (_activeVpnPopup is { IsDisposed: false, Visible: true })
+        {
+            _activeVpnPopup.SafeClose();
+            _activeVpnPopup = null;
+            return;
+        }
+
+        var btnRect = _vpnBtn.RectangleToScreen(_vpnBtn.ClientRectangle);
+        var anchor = new Point(btnRect.Left, btnRect.Bottom + 6);
+        var popup = new VpnPrivacyPopup(
+            this,
+            _ctx,
+            _palette,
+            anchor,
+            () => UpdateAdShieldBadge(),
+            RestartBrowserForNetworkChange,
+            url => _ = AddTabAsync(url));
+        popup.FormClosed += (_, _) =>
+        {
+            if (_activeVpnPopup == popup)
+                _activeVpnPopup = null;
+            UpdateVpnBadge();
+        };
+        _activeVpnPopup = popup;
+        popup.Show(this);
+    }
+
+    private void RestartBrowserForNetworkChange()
+    {
+        try
+        {
+            _ctx.SaveAll();
+            var exe = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exe) && File.Exists(exe))
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe)
+                {
+                    WorkingDirectory = AppContext.BaseDirectory,
+                    UseShellExecute = true
+                });
+            }
+            Close();
+        }
+        catch { }
     }
 
     // ── BOOKMARKS ───────────────────────────────────────────────────────────────
@@ -1965,6 +2051,7 @@ public sealed class MainForm : Form
 
         _secBtn.NormalBg = _palette.BaseBg;
         _secBtn.HoverBg = _palette.ElevatedBg;
+        UpdateVpnBadge();
         _adShieldBtn.NormalBg = _palette.BaseBg;
         _adShieldBtn.HoverBg = _palette.ElevatedBg;
         _bmStarBtn.NormalBg = _palette.BaseBg;
@@ -2134,6 +2221,7 @@ public sealed class MainForm : Form
     {
         _memoryTimer.Stop();
         _activeAppMenu?.SafeClose();
+        _activeVpnPopup?.SafeClose();
         _bmHoverTimer?.Stop();
         _bmHoverTimer?.Dispose();
         if (_notifyIcon is not null)
@@ -2141,6 +2229,9 @@ public sealed class MainForm : Form
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
         }
+
+        if (_ctx.Settings.ClearDataOnExit && !_incognito)
+            _ctx.History.Clear();
 
         foreach (var tab in _tabs.ToList())
             tab.Dispose();
@@ -2311,6 +2402,32 @@ public sealed class MainForm : Form
                 Assert(extDlg.Visible, "ExtensionsDialog renders cleanly");
                 extDlg.Close();
             }
+
+            // 6. Test Privacy, HTTPS-Only, Tracking Stripper, Proxy/DoH Args & VpnPrivacyPopup
+            var dirtyUrl = "https://example.com/path?utm_source=x&fbclid=abc123&id=42&gclid=999&tab=2#sec";
+            var cleanUrl = ProxyService.CleanTrackingParameters(dirtyUrl);
+            Assert(cleanUrl == "https://example.com/path?id=42&tab=2#sec",
+                $"Tracking param stripper => {cleanUrl}");
+
+            bool upPub = ProxyService.TryUpgradeToHttps("http://example.com/page", out var upRes);
+            bool upLoc = ProxyService.TryUpgradeToHttps("http://localhost:8080/api", out _);
+            Assert(upPub && upRes == "https://example.com/page" && !upLoc,
+                "HTTPS-Only upgrades public HTTP URLs and skips localhost");
+
+            var warpSettings = new BrowserSettings { ProxyMode = ProxyMode.CloudflareWarp, DohProvider = DohProvider.Quad9, WebRtcLeakProtection = true };
+            var warpArgs = ProxyService.BuildChromiumProxyArgs(warpSettings);
+            var browserArgs = BrowserContext.BuildBrowserArguments(warpSettings);
+            Assert(warpArgs.Contains("127.0.0.1:40000") && warpArgs.Contains("dns.quad9.net") && browserArgs.Contains("disable_non_proxied_udp"),
+                "ProxyService & BrowserContext emit WARP, Quad9 DoH & WebRTC leak flags");
+
+            using (var vpnPop = new VpnPrivacyPopup(null, dummyCtx, ThemeService.Dark, new Point(-31800, -31800), () => { }, () => { }, _ => { }, enableOutsideDismiss: false))
+            {
+                vpnPop.Location = new Point(-32000, -32000);
+                vpnPop.Show();
+                Application.DoEvents();
+                Assert(vpnPop.Visible, "VpnPrivacyPopup renders cleanly");
+                vpnPop.SafeClose();
+            }
         }
         catch (Exception ex)
         {
@@ -2416,6 +2533,18 @@ public sealed class MainForm : Form
             extDlg.DrawToBitmap(bmp, new Rectangle(0, 0, extDlg.Width, extDlg.Height));
             bmp.Save(Path.Combine(outDir, "extensions_dialog.png"), ImageFormat.Png);
             extDlg.Close();
+        }
+
+        // Capture VpnPrivacyPopup preview
+        using (var vpnPop = new VpnPrivacyPopup(main, ctx, palette, new Point(-31800, -31800), () => { }, () => { }, _u => { }, enableOutsideDismiss: false))
+        {
+            vpnPop.Location = new Point(-32000, -32000);
+            vpnPop.Show();
+            Application.DoEvents();
+            using var bmp = new Bitmap(vpnPop.Width, vpnPop.Height);
+            vpnPop.DrawToBitmap(bmp, new Rectangle(0, 0, vpnPop.Width, vpnPop.Height));
+            bmp.Save(Path.Combine(outDir, "vpn_privacy_popup.png"), ImageFormat.Png);
+            vpnPop.SafeClose();
         }
 
         // Capture History Panel preview with sample entries if empty

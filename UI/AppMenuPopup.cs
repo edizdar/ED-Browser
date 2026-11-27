@@ -50,6 +50,7 @@ public sealed class AppMenuState
     public Action? TakeScreenshot { get; init; }
 
     public Action? ClearBrowsingData { get; init; }
+    public Action? OpenVpnPopup { get; init; }
     public Action? OptimizeRam { get; init; }
     public Action? ImportData { get; init; }
     public Action? ToggleDevTools { get; init; }
@@ -165,6 +166,7 @@ public sealed class AppMenuPopup : Form
         y = AddActionRow(y, VectorIcon.Camera, "Ekran Görüntüsü Al", "Ctrl+Shift+S", _state.HasNavigatedTab, _state.TakeScreenshot);
         y = AddSeparator(y);
 
+        y = AddActionRow(y, VectorIcon.Shield, "VPN & Gizlilik Kalkanı", "", true, _state.OpenVpnPopup);
         y = AddActionRow(y, VectorIcon.Trash, "Tarama Verilerini Temizle", "Ctrl+Shift+Del", true, _state.ClearBrowsingData);
         y = AddActionRow(y, VectorIcon.Bolt, "RAM Optimize Et", "", true, _state.OptimizeRam);
         y = AddActionRow(y, VectorIcon.Import, "Diğer Tarayıcıdan İçe Aktar", "", true, _state.ImportData);
