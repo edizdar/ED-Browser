@@ -24,6 +24,8 @@ public sealed class BookmarkBarControl : Control
     private bool _hoverOverflow;
     private int _lastTipIdx = -1;
 
+    public Func<string, Image?>? FaviconResolver { get; set; }
+
     // Direct drag state
     private int _pressIdx = -1;
     private Point _pressPt;
@@ -492,11 +494,14 @@ public sealed class BookmarkBarControl : Control
             g.DrawPath(pen, path);
         }
 
-        float iconSz = 12f * sc;
+        float iconSz = 13f * sc;
         Color fg = dimmed ? _p.TextMuted : (dropFolderHighlight || item.IsFolder ? _p.Accent : _p.TextSecondary);
-        IconPainter.Draw(g, item.IsFolder ? VectorIcon.Folder : VectorIcon.Bookmark,
-            new RectangleF(r.X + 8f * sc, r.Y + (r.Height - iconSz) / 2f, iconSz, iconSz),
-            fg, 1.45f);
+        var icoRect = new RectangleF(r.X + 8f * sc, r.Y + (r.Height - iconSz) / 2f, iconSz, iconSz);
+        Image? fav = !item.IsFolder ? FaviconResolver?.Invoke(item.Url) : null;
+        if (fav is not null)
+            g.DrawImage(fav, icoRect);
+        else
+            IconPainter.Draw(g, item.IsFolder ? VectorIcon.Folder : VectorIcon.Bookmark, icoRect, fg, 1.45f);
 
         string label = string.IsNullOrWhiteSpace(item.Name) ? item.Url : item.Name;
         var txtRect = new Rectangle((int)(r.X + 24f * sc), (int)r.Y, Math.Max(8, (int)(r.Width - 30f * sc)), (int)r.Height);

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using EDBrowser.Models;
 
 namespace EDBrowser.Services;
@@ -11,12 +12,15 @@ public sealed class StorageService
         PropertyNameCaseInsensitive = true
     };
 
+    public string BaseDataDirectory { get; }
+    public string ActiveProfileId { get; }
     public string DataDirectory { get; }
     public bool IsInstalledMode { get; }
     public string WebViewUserDataDirectory { get; }
     public string DownloadsDirectory { get; }
 
     public string SettingsPath => Path.Combine(DataDirectory, "settings.json");
+    public string SessionPath => Path.Combine(DataDirectory, "session.json");
     public string BookmarksPath => Path.Combine(DataDirectory, "bookmarks.json");
     public string HistoryPath => Path.Combine(DataDirectory, "history.json");
     public string DownloadsPath => Path.Combine(DataDirectory, "downloads.json");
@@ -24,13 +28,26 @@ public sealed class StorageService
     public string ShortcutsPath => Path.Combine(DataDirectory, "shortcuts.json");
     public string ExtensionsPath => Path.Combine(DataDirectory, "extensions.json");
     public string ExtensionsDirectory => Path.Combine(DataDirectory, "Extensions");
+    public string FaviconsDirectory => Path.Combine(DataDirectory, "Favicons");
+    public string RemoteAdBlockPath => Path.Combine(DataDirectory, "adblock_remote.txt");
     public string KeyPath => Path.Combine(DataDirectory, "vault.key");
 
-    public StorageService()
+    public StorageService(string? profileId = null)
     {
         IsInstalledMode = File.Exists(Path.Combine(AppContext.BaseDirectory, "installed.flag"));
-        DataDirectory = ResolvePortableOrLocalDataDir(IsInstalledMode);
+        BaseDataDirectory = ResolvePortableOrLocalDataDir(IsInstalledMode);
+        Directory.CreateDirectory(BaseDataDirectory);
+
+        ActiveProfileId = string.IsNullOrWhiteSpace(profileId) || profileId.Equals("default", StringComparison.OrdinalIgnoreCase)
+            ? "default"
+            : SanitizeProfileId(profileId);
+
+        DataDirectory = ActiveProfileId == "default"
+            ? BaseDataDirectory
+            : Path.Combine(BaseDataDirectory, "Profiles", ActiveProfileId);
+
         Directory.CreateDirectory(DataDirectory);
+        Directory.CreateDirectory(FaviconsDirectory);
         WebViewUserDataDirectory = Path.Combine(DataDirectory, "WebView2Cache");
         Directory.CreateDirectory(WebViewUserDataDirectory);
         DownloadsDirectory = Path.Combine(
@@ -40,6 +57,12 @@ public sealed class StorageService
         {
             DownloadsDirectory = DataDirectory;
         }
+    }
+
+    public static string SanitizeProfileId(string raw)
+    {
+        var s = Regex.Replace((raw ?? "").Trim(), @"[^a-zA-Z0-9_-]", "_");
+        return string.IsNullOrWhiteSpace(s) ? "profile" : s[..Math.Min(s.Length, 40)];
     }
 
     private static string ResolvePortableOrLocalDataDir(bool isInstalledMode)
@@ -112,14 +135,15 @@ public sealed class StorageService
             s.DohProvider = DohProvider.Cloudflare;
         s.UseCloudflareDoH = false;
         s.VpnProfiles ??= new List<VpnProfile>();
-        // v4.4.0 could cache Cloudflare-only free relays (e.g. broken CZ node); reset once on upgrade to 4.4.1
+        s.AdBlockWhitelistHosts ??= new List<string>();
+        s.HttpsOnlyBypassHosts ??= new List<string>();
         if (s.Version == "4.4.0" && s.ProxyMode == ProxyMode.FreeCommunity)
         {
             s.ActiveFreeServerUrl = string.Empty;
             s.ActiveFreeServerLabel = string.Empty;
             s.ActiveFreeServerCountry = string.Empty;
         }
-        s.Version = "4.4.1";
+        s.Version = "5.0.0";
         s.AutoSleepMinutes = Math.Clamp(s.AutoSleepMinutes, 1, 120);
         s.DeepUnloadMinutes = Math.Clamp(s.DeepUnloadMinutes, 2, 240);
         s.RendererProcessLimit = Math.Clamp(s.RendererProcessLimit, 1, 8);
@@ -127,6 +151,9 @@ public sealed class StorageService
     }
 
     public void SaveSettings(BrowserSettings settings) => SaveJson(SettingsPath, settings);
+
+    public SavedSession LoadSession() => LoadJson(SessionPath, new SavedSession());
+    public void SaveSession(SavedSession session) => SaveJson(SessionPath, session);
 
     public List<BookmarkItem> LoadBookmarks() => LoadJson(BookmarksPath, new List<BookmarkItem>());
     public void SaveBookmarks(List<BookmarkItem> items) => SaveJson(BookmarksPath, items);

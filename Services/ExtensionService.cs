@@ -208,6 +208,7 @@ public sealed class ExtensionService
             existing.SourceStore = sourceStore;
             existing.PopupPath = meta.PopupPath;
             existing.OptionsPath = meta.OptionsPath;
+            existing.IconPath = meta.IconPath;
             existing.Enabled = true;
             _storage.SaveExtensions(Items);
             if (profile is not null)
@@ -225,6 +226,7 @@ public sealed class ExtensionService
             SourceStore = sourceStore,
             PopupPath = meta.PopupPath,
             OptionsPath = meta.OptionsPath,
+            IconPath = meta.IconPath,
             Enabled = true
         };
         Items.Insert(0, item);
@@ -344,7 +346,7 @@ public sealed class ExtensionService
         catch { }
     }
 
-    private static (string Name, string Version, string Description, string PopupPath, string OptionsPath) ReadManifestMetadata(string folder)
+    private static (string Name, string Version, string Description, string PopupPath, string OptionsPath, string IconPath) ReadManifestMetadata(string folder)
     {
         var manifestPath = Path.Combine(folder, "manifest.json");
         using var doc = JsonDocument.Parse(File.ReadAllText(manifestPath));
@@ -364,12 +366,26 @@ public sealed class ExtensionService
         string options = root.TryGetProperty("options_page", out var op) ? op.GetString() ?? ""
             : (root.TryGetProperty("options_ui", out var oui) && oui.TryGetProperty("page", out var oup)) ? oup.GetString() ?? "" : "";
 
+        string iconPath = string.Empty;
+        if (root.TryGetProperty("icons", out var iconsEl) && iconsEl.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var sz in new[] { "32", "48", "16", "64", "128" })
+            {
+                if (iconsEl.TryGetProperty(sz, out var ip) && ip.GetString() is { Length: > 0 } rel)
+                {
+                    var full = Path.Combine(folder, rel.TrimStart('/', '\\').Replace('/', Path.DirectorySeparatorChar));
+                    if (File.Exists(full)) { iconPath = full; break; }
+                }
+            }
+        }
+
         return (
             ResolveLocaleMsg(folder, rawName, defaultLocale),
             version,
             ResolveLocaleMsg(folder, rawDesc, defaultLocale),
             popup.TrimStart('/'),
-            options.TrimStart('/')
+            options.TrimStart('/'),
+            iconPath
         );
     }
 

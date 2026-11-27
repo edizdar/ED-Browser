@@ -12,6 +12,7 @@ public sealed class InstalledExtension
     public string SourceStore { get; set; } = "Yerel";
     public string PopupPath { get; set; } = string.Empty;
     public string OptionsPath { get; set; } = string.Empty;
+    public string IconPath { get; set; } = string.Empty;
     public bool Enabled { get; set; } = true;
     public long InstalledAtUnixMs { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 }

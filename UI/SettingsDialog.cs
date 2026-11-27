@@ -33,10 +33,15 @@ public sealed class SettingsDialog : Form
     private readonly RoundedTextBox _homeBox;
     private readonly ComboBox _searchCombo;
     private readonly ComboBox _themeCombo;
+    private readonly ModernToggleSwitch _restoreSessionToggle;
+    private readonly ModernToggleSwitch _verticalTabsToggle;
 
     // Privacy & Network controls
     private readonly ModernToggleSwitch _vpnEnabledToggle;
+    private readonly ModernToggleSwitch _killSwitchToggle;
     private readonly ModernToggleSwitch _adToggle;
+    private readonly ModernToggleSwitch _cosmeticAdToggle;
+    private readonly Label _filterStatusLbl;
     private readonly ModernToggleSwitch _bmBarToggle;
     private readonly ModernToggleSwitch _httpsToggle;
     private readonly ModernToggleSwitch _stripToggle;
@@ -182,9 +187,22 @@ public sealed class SettingsDialog : Form
             Math.Max(0, Array.FindIndex(Engines, e => e.Url == s.SearchEngine)));
         _themeCombo = CreateCombo(new[] { "Karanlık (Dark)", "Aydınlık (Light)" },
             s.Theme == BrowserTheme.Light ? 1 : 0);
+        _restoreSessionToggle = CreateToggle(s.RestoreSessionOnStartup);
+        _verticalTabsToggle = CreateToggle(s.UseVerticalTabs);
 
         _vpnEnabledToggle = CreateToggle(s.VpnEnabled);
+        _killSwitchToggle = CreateToggle(s.VpnKillSwitch);
         _adToggle = CreateToggle(s.AdBlockEnabled);
+        _cosmeticAdToggle = CreateToggle(s.CosmeticAdBlockEnabled);
+        _filterStatusLbl = new Label
+        {
+            Text = $"Aktif kural: {_ctx.AdBlocker.TotalRuleCount:N0}" +
+                   (string.IsNullOrEmpty(s.LastFilterUpdateIso) ? " (Yerleşik)" : $" • Son güncelleme: {s.LastFilterUpdateIso}"),
+            Font = new Font("Segoe UI", 8.5f),
+            ForeColor = _p.TextSecondary,
+            AutoSize = true,
+            UseMnemonic = false
+        };
         _bmBarToggle = CreateToggle(s.ShowBookmarkBar);
         _httpsToggle = CreateToggle(s.HttpsOnlyMode);
         _stripToggle = CreateToggle(s.StripTrackingParams);
@@ -489,7 +507,9 @@ public sealed class SettingsDialog : Form
         CreateCard(sec,
             MakeFieldRow("Ana Sayfa", "Yeni tarayıcı açıldığında veya Ana Sayfa butonuna basıldığında açılacak adres.", _homeBox),
             MakeFieldRow("Varsayılan Arama Motoru", "Adres çubuğuna URL yerine kelime yazıldığında kullanılır.", _searchCombo),
-            MakeFieldRow("Tema ve Görünüm", "Karanlık ve aydınlık arayüz teması arasında geçiş yapın.", _themeCombo)
+            MakeFieldRow("Tema ve Görünüm", "Karanlık ve aydınlık arayüz teması arasında geçiş yapın.", _themeCombo),
+            MakeSwitchRow("Oturumu Başlangıçta Kurtar", "Tarayıcı yeniden açıldığında son oturumdaki sekmeleri otomatik geri yükler.", _restoreSessionToggle),
+            MakeSwitchRow("Dikey Sekme Çubuğu Kullan (Ctrl+Shift+V)", "Sekmeleri üst çubuk yerine sol kenarda katlanabilir dikey listede gösterir.", _verticalTabsToggle)
         );
         return sec;
     }
@@ -498,9 +518,39 @@ public sealed class SettingsDialog : Form
     {
         var sec = CreateSectionContainer("Gizlilik, VPN & Ağ", "İzleme engelleme, HTTPS-Only, WebRTC sızıntı koruması, şifreli DNS (DoH) ve VPN/Proxy tünelleri.");
 
+        var updateFiltersBtn = new ModernButton { Text = "Filtre Listesini Güncelle", Height = 32 };
+        updateFiltersBtn.ApplyTheme(_p);
+        updateFiltersBtn.FitWidthToText(180, 26);
+        updateFiltersBtn.Click += async (_, _) =>
+        {
+            updateFiltersBtn.Enabled = false;
+            _filterStatusLbl.Text = "Peter Lowe / EasyList filtresi indiriliyor…";
+            var res = await _ctx.AdBlocker.UpdateFilterListsAsync(_ctx.Storage.RemoteAdBlockPath);
+            updateFiltersBtn.Enabled = true;
+            if (res.Ok)
+            {
+                _ctx.Settings.LastFilterUpdateIso = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+                _ctx.Storage.SaveSettings(_ctx.Settings);
+                _filterStatusLbl.ForeColor = _p.Green;
+                _filterStatusLbl.Text = $"{res.Message} (Toplam: {_ctx.AdBlocker.TotalRuleCount:N0} kural)";
+            }
+            else
+            {
+                _filterStatusLbl.ForeColor = _p.Red;
+                _filterStatusLbl.Text = res.Message;
+            }
+        };
+        var filterRow = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, WrapContents = true, BackColor = Color.Transparent, Margin = new Padding(0, 4, 0, 0) };
+        _filterStatusLbl.Margin = new Padding(12, 7, 0, 0);
+        filterRow.Controls.Add(updateFiltersBtn);
+        filterRow.Controls.Add(_filterStatusLbl);
+
         CreateCard(sec,
             MakeSwitchRow("VPN Korumasını Etkinleştir (Anlık)", "Tüm web trafiğini yerel router üzerinden seçilen VPN tünelinden geçirir (yeniden başlatma gerekmez).", _vpnEnabledToggle),
-            MakeSwitchRow("Reklam & İzleyici Engelleyici", $"150+ reklam ve takipçi ağını sayfa yüklenmeden keser (bu oturum: {_ctx.AdBlocker.TotalBlockedCount} engelleme).", _adToggle),
+            MakeSwitchRow("VPN Kill Switch (IP Sızıntı Engeli)", "VPN açıkken tünel düşerse doğrudan bağlantıya düşmek yerine trafiği keserek gerçek IP adresinizi korur.", _killSwitchToggle),
+            MakeSwitchRow("Reklam & İzleyici Engelleyici", $"{_ctx.AdBlocker.TotalRuleCount:N0} alan adı kuralıyla reklam ve takipçileri keser (bu oturum: {_ctx.AdBlocker.TotalBlockedCount}).", _adToggle),
+            MakeSwitchRow("Kozmetik Reklam Gizleme (CSS)", "Engellenen reklamlardan kalan boş reklam kutularını sayfadan otomatik gizler.", _cosmeticAdToggle),
+            filterRow,
             MakeSwitchRow("HTTPS-Only (Otomatik HTTPS Yükseltme)", "HTTP bağlantıları mümkün olan tüm harici sitelerde otomatik olarak HTTPS'ye yükseltir.", _httpsToggle),
             MakeSwitchRow("URL İzleme Parametrelerini Temizle", "Bağlantılardaki utm_*, fbclid, gclid, igshid, msclkid gibi takip etiketlerini otomatik siler.", _stripToggle),
             MakeSwitchRow("WebRTC Yerel IP Sızıntı Koruması", "VPN veya proxy kullanırken yerel ağ IP adresinizin WebRTC üzerinden sızmasını engeller (yeniden başlatmada uygulanır).", _webrtcToggle),
@@ -633,14 +683,26 @@ public sealed class SettingsDialog : Form
         checkUpdateBtn.ApplyTheme(_p);
         checkUpdateBtn.FitWidthToText(210, 32);
 
-        var dlUpdateBtn = new ModernButton { Text = "Yeni Sürümü İndir", Height = 34, Visible = false };
+        var dlUpdateBtn = new ModernButton { Text = "Otomatik Güncelle", Primary = true, Height = 34, Visible = false };
         dlUpdateBtn.ApplyTheme(_p);
-        dlUpdateBtn.FitWidthToText(150, 28);
+        dlUpdateBtn.FitWidthToText(165, 28);
         string? latestReleaseLink = null;
-        dlUpdateBtn.Click += (_, _) =>
+        dlUpdateBtn.Click += async (_, _) =>
         {
-            if (!string.IsNullOrEmpty(latestReleaseLink))
-                try { Process.Start(new ProcessStartInfo(latestReleaseLink) { UseShellExecute = true }); } catch { }
+            if (string.IsNullOrEmpty(latestReleaseLink)) return;
+            dlUpdateBtn.Enabled = false;
+            var prog = new Progress<int>(pct => dlUpdateBtn.Text = $"İndiriliyor %{pct}");
+            var res = await UpdateService.DownloadAndApplyUpdateAsync(latestReleaseLink, _ctx.Storage.IsInstalledMode, prog);
+            if (!res.Ok)
+            {
+                dlUpdateBtn.Enabled = true;
+                dlUpdateBtn.Text = "Otomatik Güncelle";
+                MessageBox.Show(this, "Otomatik güncelleme başarısız:\n" + res.Message, "Güncelleme", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            else if (!_ctx.Storage.IsInstalledMode)
+            {
+                Application.Exit();
+            }
         };
 
         checkUpdateBtn.Click += async (_, _) =>
@@ -779,8 +841,12 @@ public sealed class SettingsDialog : Form
         s.HomePage = string.IsNullOrWhiteSpace(_homeBox.Text) ? "https://www.google.com" : _homeBox.Text.Trim();
         s.SearchEngine = Engines[Math.Max(0, _searchCombo.SelectedIndex)].Url;
         s.Theme = _themeCombo.SelectedIndex == 1 ? BrowserTheme.Light : BrowserTheme.Dark;
+        s.RestoreSessionOnStartup = _restoreSessionToggle.Checked;
+        s.UseVerticalTabs = _verticalTabsToggle.Checked;
         s.VpnEnabled = _vpnEnabledToggle.Checked;
+        s.VpnKillSwitch = _killSwitchToggle.Checked;
         s.AdBlockEnabled = _adToggle.Checked;
+        s.CosmeticAdBlockEnabled = _cosmeticAdToggle.Checked;
         s.ShowBookmarkBar = _bmBarToggle.Checked;
         s.HttpsOnlyMode = _httpsToggle.Checked;
         s.StripTrackingParams = _stripToggle.Checked;

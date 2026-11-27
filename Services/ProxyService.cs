@@ -325,11 +325,35 @@ public static partial class ProxyService
         }
     }
 
-    public static async Task<List<FreeVpnServer>> DiscoverVerifiedFreeRelaysAsync(int maxVerified = 8, CancellationToken ct = default)
+    private static readonly HashSet<string> EuCountries = new(StringComparer.OrdinalIgnoreCase)
+        { "DE","NL","FR","GB","IT","ES","PL","RO","CH","SE","FI","AT","BE","CZ","NO","IE","DK","PT","GR","HU","BG","SK","LV","LT","EE","UA","LU","HR","RS" };
+    private static readonly HashSet<string> UsCountries = new(StringComparer.OrdinalIgnoreCase)
+        { "US","CA","MX","BR","AR","CL","CO","PE" };
+    private static readonly HashSet<string> AsCountries = new(StringComparer.OrdinalIgnoreCase)
+        { "SG","JP","KR","IN","HK","TW","VN","TH","MY","PH","ID","AU","NZ","SA","AE","IL","TR","KZ" };
+
+    public static bool MatchesRegion(string? countryCode, string? regionFilter)
+    {
+        if (string.IsNullOrWhiteSpace(regionFilter) || regionFilter.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+            return true;
+        var cc = (countryCode ?? "").Trim();
+        return regionFilter.ToUpperInvariant() switch
+        {
+            "EU" => EuCountries.Contains(cc),
+            "US" => UsCountries.Contains(cc),
+            "AS" => AsCountries.Contains(cc),
+            _ => true
+        };
+    }
+
+    public static Task<List<FreeVpnServer>> DiscoverVerifiedFreeRelaysAsync(int maxVerified = 8, CancellationToken ct = default) =>
+        DiscoverVerifiedFreeRelaysAsync(maxVerified, "ALL", ct);
+
+    public static async Task<List<FreeVpnServer>> DiscoverVerifiedFreeRelaysAsync(int maxVerified, string regionFilter, CancellationToken ct = default)
     {
         var candidates = new Dictionary<string, CandidateRelay>(StringComparer.OrdinalIgnoreCase);
         using var fetchHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(7) };
-        fetchHttp.DefaultRequestHeaders.UserAgent.ParseAdd("EDBrowser/4.4");
+        fetchHttp.DefaultRequestHeaders.UserAgent.ParseAdd("EDBrowser/5.0");
 
         var tProxyScrape = FetchProxyScrapeCandidatesAsync(fetchHttp, ct);
         var tGeoNode = FetchGeoNodeCandidatesAsync(fetchHttp, ct);
@@ -348,7 +372,12 @@ public static partial class ProxyService
         if (candidates.Count == 0)
             return new List<FreeVpnServer>();
 
-        var ordered = candidates.Values.Take(60).ToList();
+        bool hasRegion = !string.IsNullOrWhiteSpace(regionFilter) && !regionFilter.Equals("ALL", StringComparison.OrdinalIgnoreCase);
+        var ordered = (hasRegion
+            ? candidates.Values
+                .OrderByDescending(c => MatchesRegion(c.CountryCode, regionFilter))
+                .Take(64)
+            : candidates.Values.Take(60)).ToList();
 
         var verified = new ConcurrentBag<FreeVpnServer>();
         using var sem = new SemaphoreSlim(16, 16);
@@ -380,14 +409,12 @@ public static partial class ProxyService
                 };
                 using var client = new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(4000) };
 
-                // Check 1: General arbitrary HTTPS site (eliminates Cloudflare-only reverse proxies like broken CZ node)
                 var sw = Stopwatch.StartNew();
                 using var gResp = await client.GetAsync("https://www.google.com/generate_204", perProbeCts.Token).ConfigureAwait(false);
                 if ((int)gResp.StatusCode is not (204 or 200))
                     return;
                 long googleMs = sw.ElapsedMilliseconds;
 
-                // Check 2: Cloudflare trace (verifies multi-host HTTPS CONNECT tunneling + reveals exit IP & country)
                 var trace = await client.GetStringAsync("https://cloudflare.com/cdn-cgi/trace", perProbeCts.Token).ConfigureAwait(false);
                 var ip = IpRegex().Match(trace).Groups[1].Value.Trim();
                 var loc = LocRegex().Match(trace).Groups[1].Value.Trim();
@@ -405,12 +432,12 @@ public static partial class ProxyService
                     (int)Math.Max(1, googleMs),
                     ip));
 
-                if (verified.Count >= maxVerified)
+                int regionMatches = verified.Count(v => MatchesRegion(v.CountryCode, regionFilter));
+                if ((!hasRegion && verified.Count >= maxVerified) || (hasRegion && regionMatches >= maxVerified))
                     verifyCts.Cancel();
             }
             catch
             {
-                // Candidate unreachable, slow, or blocked general HTTPS CONNECT
             }
             finally
             {
@@ -420,10 +447,14 @@ public static partial class ProxyService
 
         try { await Task.WhenAll(tasks).ConfigureAwait(false); } catch { }
 
-        return verified
-            .OrderBy(v => v.LatencyMs)
-            .Take(maxVerified)
-            .ToList();
+        var all = verified.OrderBy(v => v.LatencyMs).ToList();
+        if (hasRegion)
+        {
+            var matching = all.Where(v => MatchesRegion(v.CountryCode, regionFilter)).Take(maxVerified).ToList();
+            if (matching.Count > 0)
+                return matching;
+        }
+        return all.Take(maxVerified).ToList();
     }
 
     private static async Task<List<CandidateRelay>> FetchProxyScrapeCandidatesAsync(HttpClient http, CancellationToken ct)

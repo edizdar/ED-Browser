@@ -133,4 +133,83 @@ public static class UpdateService
         }
         return false;
     }
+
+    public static async Task<(bool Ok, string Message)> DownloadAndApplyUpdateAsync(
+        string downloadUrl,
+        bool isInstalledMode,
+        IProgress<int>? progress = null,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(downloadUrl))
+                return (false, "İndirme bağlantısı bulunamadı.");
+
+            var stageDir = Path.Combine(Path.GetTempPath(), "EDBrowserUpdate");
+            Directory.CreateDirectory(stageDir);
+            var fileName = Path.GetFileName(new Uri(downloadUrl).LocalPath);
+            if (string.IsNullOrWhiteSpace(fileName) || !fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                fileName = isInstalledMode ? "ED.Browser.Setup.Update.exe" : "ED.Browser.Portable.Update.exe";
+            var dlPath = Path.Combine(stageDir, fileName);
+
+            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(3) };
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("ED-Browser-Updater/5.0");
+            using var resp = await http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            resp.EnsureSuccessStatusCode();
+
+            long total = resp.Content.Headers.ContentLength ?? -1;
+            await using (var src = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
+            await using (var dst = new FileStream(dlPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                var buf = new byte[65536];
+                long readTotal = 0;
+                int n;
+                while ((n = await src.ReadAsync(buf, ct).ConfigureAwait(false)) > 0)
+                {
+                    await dst.WriteAsync(buf.AsMemory(0, n), ct).ConfigureAwait(false);
+                    readTotal += n;
+                    if (total > 0)
+                        progress?.Report((int)Math.Clamp(readTotal * 100 / total, 0, 100));
+                }
+            }
+            progress?.Report(100);
+
+            if (isInstalledMode)
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dlPath)
+                {
+                    UseShellExecute = true
+                });
+                return (true, "Kurulum sihirbazı başlatıldı.");
+            }
+
+            var currentExe = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(currentExe) || !File.Exists(currentExe))
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dlPath) { UseShellExecute = true });
+                return (true, "Yeni sürüm başlatıldı.");
+            }
+
+            var batPath = Path.Combine(stageDir, "apply_portable_update.cmd");
+            var script = $@"@echo off
+timeout /t 2 /nobreak >nul
+copy /y ""{dlPath}"" ""{currentExe}"" >nul
+start """" ""{currentExe}""
+del ""{dlPath}"" >nul 2>&1
+del ""%~f0"" >nul 2>&1
+";
+            await File.WriteAllTextAsync(batPath, script, ct).ConfigureAwait(false);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c \"{batPath}\"")
+            {
+                CreateNoWindow = true,
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
+                UseShellExecute = false
+            });
+            return (true, "Güncelleme uygulanıyor, tarayıcı yeniden başlatılacak…");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
 }

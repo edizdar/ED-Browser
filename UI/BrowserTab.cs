@@ -19,6 +19,10 @@ public sealed class BrowserTab : IDisposable
     public int BlockedOnTab { get; private set; }
     public double ZoomFactor { get; set; } = 1.0;
     public bool IsPinned { get; set; }
+    public string GroupName { get; set; } = string.Empty;
+    public Color GroupColor { get; set; } = Color.Empty;
+    public bool IsReaderMode { get; private set; }
+    public string FaviconUri { get; private set; } = string.Empty;
     public bool IsMuted => WebView?.CoreWebView2?.IsMuted ?? false;
     public bool IsPlayingAudio => WebView?.CoreWebView2?.IsDocumentPlayingAudio ?? false;
     public bool CanGoBack => WebView?.CoreWebView2?.CanGoBack ?? false;
@@ -160,6 +164,12 @@ public sealed class BrowserTab : IDisposable
             core.BasicAuthenticationRequested += OnBasicAuthRequested;
             core.IsDocumentPlayingAudioChanged += (_, _) => StateChanged?.Invoke(this);
             core.IsMutedChanged += (_, _) => StateChanged?.Invoke(this);
+            core.FaviconChanged += (_, _) =>
+            {
+                FaviconUri = core.FaviconUri ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(Url))
+                    _ = _ctx.Favicons.FetchAndCacheAsync(Url, FaviconUri);
+            };
             wv.ZoomFactorChanged += (_, _) =>
             {
                 ZoomFactor = wv.ZoomFactor;
@@ -258,7 +268,7 @@ public sealed class BrowserTab : IDisposable
             catch { }
         }
 
-        if (_ctx.Settings.AdBlockEnabled && _ctx.AdBlocker.ShouldBlock(reqUrl, _topHost))
+        if (_ctx.Settings.AdBlockEnabled && _ctx.AdBlocker.ShouldBlock(reqUrl, _topHost, _ctx.Settings.AdBlockWhitelistHosts))
         {
             _ctx.AdBlocker.RecordBlocked();
             BlockedOnTab++;
@@ -281,6 +291,7 @@ public sealed class BrowserTab : IDisposable
             if (_ctx.Settings.HttpsOnlyMode &&
                 rawUri.Scheme == Uri.UriSchemeHttp &&
                 !_httpsFailedHosts.Contains(rawUri.Host) &&
+                !_ctx.Settings.HttpsOnlyBypassHosts.Contains(rawUri.Host, StringComparer.OrdinalIgnoreCase) &&
                 ProxyService.TryUpgradeToHttps(e.Uri, out var httpsUri))
             {
                 _lastUpgradedFromHttpUrl = e.Uri;
@@ -305,6 +316,7 @@ public sealed class BrowserTab : IDisposable
 
         IsLoading = true;
         IsSleeping = false;
+        IsReaderMode = false;
         BlockedOnTab = 0;
         Url = e.Uri;
         StateChanged?.Invoke(this);
@@ -341,6 +353,25 @@ public sealed class BrowserTab : IDisposable
 
         if (!_incognito && e.IsSuccess && !string.IsNullOrWhiteSpace(Url))
             _ctx.AddHistory(Title, Url);
+
+        if (e.IsSuccess && WebView?.CoreWebView2 is not null)
+        {
+            _ = _ctx.Favicons.FetchAndCacheAsync(Url, FaviconUri);
+            if (_ctx.Settings.AdBlockEnabled && _ctx.Settings.CosmeticAdBlockEnabled &&
+                !_ctx.Settings.AdBlockWhitelistHosts.Contains(_topHost, StringComparer.OrdinalIgnoreCase))
+            {
+                var cssJson = JsonSerializer.Serialize(AdBlockerService.CosmeticHideCss);
+                _ = WebView.CoreWebView2.ExecuteScriptAsync($@"
+                    (function(){{
+                        if (!document.getElementById('ed-cosmetic-adblock')) {{
+                            var st = document.createElement('style');
+                            st.id = 'ed-cosmetic-adblock';
+                            st.textContent = {cssJson};
+                            (document.head || document.documentElement).appendChild(st);
+                        }}
+                    }})();");
+            }
+        }
 
         StateChanged?.Invoke(this);
         UrlNavigated?.Invoke(this, Url);
@@ -583,11 +614,13 @@ public sealed class BrowserTab : IDisposable
         var combo = e.KeyData;
 
         bool shouldForward = key is Keys.F5 or Keys.F11 or Keys.F12 or Keys.Escape ||
+            (mods == Keys.Shift && key == Keys.Escape) ||
+            (mods == (Keys.Control | Keys.Alt) && key == Keys.R) ||
             (mods == Keys.Control && key is Keys.T or Keys.W or Keys.L or Keys.R or Keys.D or Keys.F or Keys.P
                 or Keys.N or Keys.H or Keys.S or Keys.U or Keys.Oemcomma
                 or Keys.Oemplus or Keys.Add or Keys.OemMinus or Keys.Subtract or Keys.D0 or Keys.NumPad0
                 or >= Keys.D1 and <= Keys.D9) ||
-            (mods == (Keys.Control | Keys.Shift) && key is Keys.P or Keys.B or Keys.J or Keys.S or Keys.I or Keys.T or Keys.O or Keys.C or Keys.E or Keys.L or Keys.Delete) ||
+            (mods == (Keys.Control | Keys.Shift) && key is Keys.P or Keys.B or Keys.J or Keys.S or Keys.I or Keys.T or Keys.O or Keys.C or Keys.E or Keys.L or Keys.V or Keys.X or Keys.Delete) ||
             (mods == Keys.Alt && key is Keys.Left or Keys.Right);
 
         if (shouldForward)
@@ -658,6 +691,14 @@ public sealed class BrowserTab : IDisposable
         }
     }
 
+    public void SetRestoredStub(string title, string url)
+    {
+        Title = string.IsNullOrWhiteSpace(title) ? url : title;
+        Url = url;
+        IsDeepUnloaded = true;
+        IsSleeping = false;
+    }
+
     public void DeepUnload()
     {
         if (IsDeepUnloaded || string.IsNullOrEmpty(Url) || WebView is null)
@@ -695,6 +736,90 @@ public sealed class BrowserTab : IDisposable
         if (WebView?.CoreWebView2 is null) return;
         WebView.CoreWebView2.IsMuted = !WebView.CoreWebView2.IsMuted;
         StateChanged?.Invoke(this);
+    }
+
+    public async Task ToggleMediaPlayPauseAsync()
+    {
+        if (WebView?.CoreWebView2 is null) return;
+        try
+        {
+            await WebView.CoreWebView2.ExecuteScriptAsync(@"
+                (function(){
+                    var els = Array.from(document.querySelectorAll('video,audio'));
+                    var playing = els.find(e => !e.paused && !e.ended);
+                    if (playing) { playing.pause(); }
+                    else if (els.length > 0) { els[0].play().catch(()=>{}); }
+                })();");
+        }
+        catch { }
+    }
+
+    public async Task TogglePictureInPictureAsync()
+    {
+        if (WebView?.CoreWebView2 is null) return;
+        try
+        {
+            await WebView.CoreWebView2.ExecuteScriptAsync(@"
+                (async function(){
+                    try {
+                        if (document.pictureInPictureElement) {
+                            await document.exitPictureInPicture();
+                            return;
+                        }
+                        var vids = Array.from(document.querySelectorAll('video')).filter(v => v.readyState >= 1);
+                        if (vids.length > 0) await vids[0].requestPictureInPicture();
+                    } catch(_) {}
+                })();");
+        }
+        catch { }
+    }
+
+    public async Task ToggleReaderModeAsync()
+    {
+        if (WebView?.CoreWebView2 is null || !HasNavigated) return;
+        bool dark = _incognito || _ctx.Settings.Theme == BrowserTheme.Dark;
+        try
+        {
+            var res = await WebView.CoreWebView2.ExecuteScriptAsync($@"
+                (function(){{
+                    var old = document.getElementById('ed-reader-overlay');
+                    if (old) {{
+                        old.remove();
+                        document.documentElement.style.overflow = '';
+                        return 'off';
+                    }}
+                    var root = document.querySelector('article, main, [role=""main""], .post-content, .article-content') || document.body;
+                    var clone = root.cloneNode(true);
+                    clone.querySelectorAll('script,style,noscript,iframe,nav,aside,header,footer,.ad,.ads,.advertisement').forEach(e => e.remove());
+                    var title = document.querySelector('h1')?.innerText || document.title || '';
+                    var wrap = document.createElement('div');
+                    wrap.id = 'ed-reader-overlay';
+                    wrap.style.cssText = 'position:fixed;inset:0;z-index:2147483647;overflow:auto;padding:40px 24px;' +
+                        'background:{(dark ? "#10121b" : "#faf9f6")};color:{(dark ? "#e2e8f0" : "#1e293b")};' +
+                        'font-family:Georgia,Segoe UI,serif;font-size:19px;line-height:1.75;';
+                    var inner = document.createElement('div');
+                    inner.style.cssText = 'max-width:740px;margin:0 auto;';
+                    var bar = document.createElement('div');
+                    bar.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;padding-bottom:12px;border-bottom:1px solid rgba(148,163,184,0.25);font-family:Segoe UI,sans-serif;font-size:13px;';
+                    bar.innerHTML = '<span>ED Okuyucu Modu</span><div><button id=""ed-r-sm"" style=""margin-right:6px;padding:4px 10px;cursor:pointer;"">A-</button><button id=""ed-r-lg"" style=""margin-right:6px;padding:4px 10px;cursor:pointer;"">A+</button><button id=""ed-r-x"" style=""padding:4px 12px;cursor:pointer;"">Kapat</button></div>';
+                    var h = document.createElement('h1');
+                    h.style.cssText = 'font-size:30px;line-height:1.3;margin:0 0 22px 0;';
+                    h.innerText = title;
+                    inner.appendChild(bar);
+                    inner.appendChild(h);
+                    inner.appendChild(clone);
+                    wrap.appendChild(inner);
+                    document.body.appendChild(wrap);
+                    document.documentElement.style.overflow = 'hidden';
+                    document.getElementById('ed-r-sm').onclick = () => {{ var cur = parseFloat(wrap.style.fontSize)||19; wrap.style.fontSize = Math.max(14, cur-2)+'px'; }};
+                    document.getElementById('ed-r-lg').onclick = () => {{ var cur = parseFloat(wrap.style.fontSize)||19; wrap.style.fontSize = Math.min(30, cur+2)+'px'; }};
+                    document.getElementById('ed-r-x').onclick = () => {{ wrap.remove(); document.documentElement.style.overflow = ''; }};
+                    return 'on';
+                }})();");
+            IsReaderMode = res.Contains("on", StringComparison.OrdinalIgnoreCase);
+            StateChanged?.Invoke(this);
+        }
+        catch { }
     }
 
     public void OpenDevTools() => WebView?.CoreWebView2?.OpenDevToolsWindow();

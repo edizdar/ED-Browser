@@ -13,6 +13,8 @@ public sealed class AppMenuState
     public bool AdBlockEnabled { get; init; } = true;
     public bool ShowBookmarkBar { get; init; } = true;
     public bool ShowLeftSidebar { get; init; }
+    public bool UseVerticalTabs { get; init; }
+    public bool IsSplitViewActive { get; init; }
     public bool IsActiveTabPinned { get; init; }
     public bool IsActiveTabMuted { get; init; }
     public bool CanReopenClosedTab { get; init; }
@@ -30,8 +32,14 @@ public sealed class AppMenuState
     public Action? DuplicateTab { get; init; }
 
     public Action? OpenBookmarks { get; init; }
+    public Action? ShowBookmarkBarAction { get; init; }
     public Action? ToggleBookmarkBar { get; init; }
     public Action? ToggleLeftSidebar { get; init; }
+    public Action? ToggleVerticalTabs { get; init; }
+    public Action? ToggleSplitView { get; init; }
+    public Action? ToggleReaderMode { get; init; }
+    public Action? OpenTaskManager { get; init; }
+    public Action? OpenProfiles { get; init; }
     public Action? OpenHistory { get; init; }
     public Action? OpenDownloads { get; init; }
     public Action? OpenExtensions { get; init; }
@@ -153,11 +161,15 @@ public sealed class AppMenuPopup : Form
         y = AddActionRow(y, VectorIcon.Puzzle, "Eklentiler ve Mağaza", "Ctrl+Shift+E", true, _state.OpenExtensions);
         y = AddActionRow(y, VectorIcon.Key, "Şifre Yöneticisi", "", true, _state.OpenPasswords);
         y = AddActionRow(y, VectorIcon.Sidebar, _state.ShowLeftSidebar ? "Sol Kenar Çubuğunu Gizle" : "Sol Kenar Çubuğunu Göster", "Ctrl+Shift+L", true, _state.ToggleLeftSidebar);
+        y = AddActionRow(y, VectorIcon.VerticalTabs, _state.UseVerticalTabs ? "Yatay Sekmelere Dön" : "Dikey Sekmeler", "Ctrl+Shift+V", true, _state.ToggleVerticalTabs);
+        y = AddActionRow(y, VectorIcon.SplitView, _state.IsSplitViewActive ? "Bölünmüş Ekranı Kapat" : "Bölünmüş Ekran (Split View)", "Ctrl+Shift+X", true, _state.ToggleSplitView);
+        y = AddActionRow(y, VectorIcon.Users, "Kullanıcı Profilleri", "", true, _state.OpenProfiles);
         y = AddSeparator(y);
 
         y = BuildZoomRow(y, sc);
         y = AddSeparator(y);
 
+        y = AddActionRow(y, VectorIcon.Book, "Okuyucu Modu", "Ctrl+Alt+R", _state.HasNavigatedTab, _state.ToggleReaderMode);
         y = AddActionRow(y, VectorIcon.Search, "Sayfada Ara", "Ctrl+F", true, _state.FindInPage);
         y = AddActionRow(y, VectorIcon.Save, "Sayfayı Farklı Kaydet", "Ctrl+S", _state.HasNavigatedTab, _state.SavePageAs);
         y = AddActionRow(y, VectorIcon.Printer, "Yazdır", "Ctrl+P", _state.HasNavigatedTab, _state.PrintPage);
@@ -169,6 +181,7 @@ public sealed class AppMenuPopup : Form
         y = AddActionRow(y, VectorIcon.Shield, "VPN & Gizlilik Kalkanı", "", true, _state.OpenVpnPopup);
         y = AddActionRow(y, VectorIcon.Trash, "Tarama Verilerini Temizle", "Ctrl+Shift+Del", true, _state.ClearBrowsingData);
         y = AddActionRow(y, VectorIcon.Bolt, "RAM Optimize Et", "", true, _state.OptimizeRam);
+        y = AddActionRow(y, VectorIcon.Activity, "Görev Yöneticisi", "Shift+Esc", true, _state.OpenTaskManager);
         y = AddActionRow(y, VectorIcon.Import, "Diğer Tarayıcıdan İçe Aktar", "", true, _state.ImportData);
         y = AddActionRow(y, VectorIcon.Terminal, "Geliştirici Araçları", "F12", true, _state.ToggleDevTools);
         y = AddSeparator(y);

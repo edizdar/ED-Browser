@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -7,9 +8,8 @@ namespace EDBrowser.Services;
 
 /// <summary>
 /// In-process local HTTP/HTTPS CONNECT &amp; plain-HTTP proxy router bound to 127.0.0.1:&lt;ephemeral&gt;.
-/// WebView2 points to this router once at startup; toggling VPN ON/OFF or switching tunnels takes
-/// effect on the very next connection with zero browser restart. Includes per-handshake timeouts
-/// and automatic multi-relay failover for FreeCommunity relays.
+/// Supports zero-restart live switching, automatic multi-relay failover, Kill Switch leak blocking,
+/// and live download/upload bandwidth metering (KB/s).
 /// </summary>
 public sealed class LocalVpnRouterService : IDisposable
 {
@@ -17,7 +17,8 @@ public sealed class LocalVpnRouterService : IDisposable
     {
         Direct = 0,
         Socks5 = 1,
-        HttpProxy = 2
+        HttpProxy = 2,
+        BlockedByKillSwitch = 3
     }
 
     private sealed record RouteConfig(
@@ -28,19 +29,29 @@ public sealed class LocalVpnRouterService : IDisposable
         string Password,
         string Summary,
         bool IsFreeCommunity = false,
-        FreeVpnServer? FreeServer = null);
+        FreeVpnServer? FreeServer = null,
+        bool KillSwitch = false);
 
     private readonly object _lock = new();
+    private readonly object _bwLock = new();
     private readonly List<(FreeVpnServer Server, RouteConfig Route)> _failoverPool = new();
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private volatile RouteConfig _route = new(RouteKind.Direct, "", 0, "", "", "Doğrudan (VPN Kapalı)");
+
+    private long _bytesDownInterval;
+    private long _bytesUpInterval;
+    private long _totalBytesDown;
+    private long _totalBytesUp;
+    private readonly Stopwatch _bwSw = Stopwatch.StartNew();
 
     public event Action<FreeVpnServer>? FailoverServerPromoted;
 
     public int ListenPort { get; private set; }
     public bool IsRunning => ListenPort > 0 && _cts is { IsCancellationRequested: false };
     public string CurrentRouteSummary => _route.Summary;
+    public bool IsKillSwitchBlocking => _route.Kind == RouteKind.BlockedByKillSwitch;
+
     public bool HasFailoverRoutes
     {
         get { lock (_lock) return _failoverPool.Count > 0; }
@@ -59,12 +70,43 @@ public sealed class LocalVpnRouterService : IDisposable
         }
     }
 
+    public (double DownKBps, double UpKBps, long TotalDown, long TotalUp) SampleBandwidth()
+    {
+        lock (_bwLock)
+        {
+            double sec = Math.Max(0.1, _bwSw.Elapsed.TotalSeconds);
+            _bwSw.Restart();
+            long d = Interlocked.Exchange(ref _bytesDownInterval, 0);
+            long u = Interlocked.Exchange(ref _bytesUpInterval, 0);
+            return (
+                d / 1024.0 / sec,
+                u / 1024.0 / sec,
+                Interlocked.Read(ref _totalBytesDown),
+                Interlocked.Read(ref _totalBytesUp));
+        }
+    }
+
+    internal void RecordTrafficForTest(long downBytes, long upBytes)
+    {
+        if (downBytes > 0)
+        {
+            Interlocked.Add(ref _bytesDownInterval, downBytes);
+            Interlocked.Add(ref _totalBytesDown, downBytes);
+        }
+        if (upBytes > 0)
+        {
+            Interlocked.Add(ref _bytesUpInterval, upBytes);
+            Interlocked.Add(ref _totalBytesUp, upBytes);
+        }
+    }
+
     public void SetFreeFailoverPool(IEnumerable<FreeVpnServer> servers)
     {
         var items = new List<(FreeVpnServer, RouteConfig)>();
+        bool ks = _route.KillSwitch;
         foreach (var srv in servers)
         {
-            if (TryBuildRouteFromUrl(srv.ProxyUrl, "", "", srv.DisplayText, isFree: true, srv, out var cfg))
+            if (TryBuildRouteFromUrl(srv.ProxyUrl, "", "", srv.DisplayText, isFree: true, srv, ks, out var cfg))
                 items.Add((srv, cfg));
         }
 
@@ -100,7 +142,9 @@ public sealed class LocalVpnRouterService : IDisposable
         var effUrl = ProxyService.ResolveEffectiveProxyUrl(s, ignoreVpnEnabledFlag: true);
         if (string.IsNullOrWhiteSpace(effUrl))
         {
-            _route = new RouteConfig(RouteKind.Direct, "", 0, "", "", "Sunucu bekleniyor (Doğrudan)");
+            _route = s.VpnKillSwitch
+                ? new RouteConfig(RouteKind.BlockedByKillSwitch, "", 0, "", "", "Kill Switch Aktif (Trafik Engellendi)", KillSwitch: true)
+                : new RouteConfig(RouteKind.Direct, "", 0, "", "", "Sunucu bekleniyor (Doğrudan)");
             return;
         }
 
@@ -134,8 +178,10 @@ public sealed class LocalVpnRouterService : IDisposable
             _ => effUrl
         };
 
-        if (TryBuildRouteFromUrl(effUrl, user, pass, summaryHint, s.ProxyMode == ProxyMode.FreeCommunity, freeSrv, out var cfg))
+        if (TryBuildRouteFromUrl(effUrl, user, pass, summaryHint, s.ProxyMode == ProxyMode.FreeCommunity, freeSrv, s.VpnKillSwitch, out var cfg))
             _route = cfg;
+        else if (s.VpnKillSwitch)
+            _route = new RouteConfig(RouteKind.BlockedByKillSwitch, "", 0, "", "", "Kill Switch Aktif (Geçersiz Tünel)", KillSwitch: true);
         else
             _route = new RouteConfig(RouteKind.Direct, "", 0, "", "", "Sunucu bekleniyor (Doğrudan)");
     }
@@ -147,6 +193,7 @@ public sealed class LocalVpnRouterService : IDisposable
         string summary,
         bool isFree,
         FreeVpnServer? freeSrv,
+        bool killSwitch,
         out RouteConfig config)
     {
         config = new RouteConfig(RouteKind.Direct, "", 0, "", "", "Doğrudan");
@@ -181,7 +228,8 @@ public sealed class LocalVpnRouterService : IDisposable
             pass,
             summary,
             isFree,
-            freeSrv);
+            freeSrv,
+            killSwitch);
         return true;
     }
 
@@ -229,6 +277,12 @@ public sealed class LocalVpnRouterService : IDisposable
                 var version = parts[2];
                 var route = _route;
 
+                if (route.Kind == RouteKind.BlockedByKillSwitch)
+                {
+                    await WriteErrorAsync(clientStream, "503 Service Unavailable (VPN Kill Switch Active)", ct).ConfigureAwait(false);
+                    return;
+                }
+
                 if (method.Equals("CONNECT", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!TryParseHostPort(target, 443, out var host, out var port))
@@ -245,12 +299,13 @@ public sealed class LocalVpnRouterService : IDisposable
                         {
                             upstream.NoDelay = true;
                             using var upStream = upstream.GetStream();
-                            var okResp = Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\nProxy-Agent: ED-Browser-Router/4.4.1\r\n\r\n");
+                            var okResp = Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\nProxy-Agent: ED-Browser-Router/5.0\r\n\r\n");
                             await clientStream.WriteAsync(okResp, ct).ConfigureAwait(false);
                             await clientStream.FlushAsync(ct).ConfigureAwait(false);
 
                             if (bodyPrefix.Length > 0)
                             {
+                                RecordTrafficForTest(0, bodyPrefix.Length);
                                 await upStream.WriteAsync(bodyPrefix, ct).ConfigureAwait(false);
                                 await upStream.FlushAsync(ct).ConfigureAwait(false);
                             }
@@ -261,12 +316,11 @@ public sealed class LocalVpnRouterService : IDisposable
                     catch
                     {
                         upstream?.Dispose();
-                        await WriteErrorAsync(clientStream, "502 Bad Gateway", ct).ConfigureAwait(false);
+                        await WriteErrorAsync(clientStream, route.KillSwitch ? "503 Service Unavailable (Kill Switch)" : "502 Bad Gateway", ct).ConfigureAwait(false);
                     }
                     return;
                 }
 
-                // Plain HTTP request (GET http://host/path HTTP/1.1 etc.)
                 if (!TryParseHttpTarget(target, headerText[(firstLineEnd + 2)..], out var targetHost, out var targetPort, out var pathAndQuery))
                 {
                     await WriteErrorAsync(clientStream, "400 Bad Request", ct).ConfigureAwait(false);
@@ -284,6 +338,7 @@ public sealed class LocalVpnRouterService : IDisposable
                             upstream.NoDelay = true;
                             using var upStream = upstream.GetStream();
                             var forwarded = InjectProxyAuthIfNeeded(headerBytes, route);
+                            RecordTrafficForTest(0, forwarded.Length + bodyPrefix.Length);
                             await upStream.WriteAsync(forwarded, ct).ConfigureAwait(false);
                             if (bodyPrefix.Length > 0)
                                 await upStream.WriteAsync(bodyPrefix, ct).ConfigureAwait(false);
@@ -322,7 +377,6 @@ public sealed class LocalVpnRouterService : IDisposable
                     return;
                 }
 
-                // Direct or SOCKS5 tunnel for plain HTTP
                 TcpClient? directOrSocks = null;
                 try
                 {
@@ -332,6 +386,7 @@ public sealed class LocalVpnRouterService : IDisposable
                         directOrSocks.NoDelay = true;
                         using var upStream = directOrSocks.GetStream();
                         var rewritten = RewriteToOriginHttpRequest(method, pathAndQuery, version, headerText[(firstLineEnd + 2)..]);
+                        RecordTrafficForTest(0, rewritten.Length + bodyPrefix.Length);
                         await upStream.WriteAsync(rewritten, ct).ConfigureAwait(false);
                         if (bodyPrefix.Length > 0)
                             await upStream.WriteAsync(bodyPrefix, ct).ConfigureAwait(false);
@@ -393,14 +448,13 @@ public sealed class LocalVpnRouterService : IDisposable
                 hsCts.CancelAfter(4500);
                 var client = await OpenTunnelAsync(targetHost, targetPort, cfg, hsCts.Token).ConfigureAwait(false);
 
-                // Promote working relay so subsequent connections don't waste time hitting dead primary
                 bool promoted = false;
                 lock (_lock)
                 {
                     if (_route.UpstreamHost.Equals(primary.UpstreamHost, StringComparison.OrdinalIgnoreCase) &&
                         _route.UpstreamPort == primary.UpstreamPort)
                     {
-                        _route = cfg;
+                        _route = cfg with { KillSwitch = primary.KillSwitch };
                         promoted = true;
                         int idx = _failoverPool.FindIndex(x =>
                             x.Route.UpstreamHost.Equals(primary.UpstreamHost, StringComparison.OrdinalIgnoreCase) &&
@@ -424,11 +478,16 @@ public sealed class LocalVpnRouterService : IDisposable
             }
         }
 
-        throw lastErr ?? new IOException("All free VPN relays failed to tunnel target host.");
+        throw lastErr ?? new IOException(primary.KillSwitch
+            ? "VPN Kill Switch active and all relays failed."
+            : "All free VPN relays failed to tunnel target host.");
     }
 
     private static async Task<TcpClient> OpenTunnelAsync(string targetHost, int targetPort, RouteConfig route, CancellationToken ct)
     {
+        if (route.Kind == RouteKind.BlockedByKillSwitch)
+            throw new IOException("Blocked by VPN Kill Switch");
+
         if (route.Kind == RouteKind.Direct)
             return await ConnectWithTimeoutAsync(targetHost, targetPort, 8000, ct).ConfigureAwait(false);
 
@@ -466,7 +525,6 @@ public sealed class LocalVpnRouterService : IDisposable
             }
         }
 
-        // SOCKS5 (RFC 1928 + optional RFC 1929 auth) with remote domain resolution (ATYP = 0x03)
         var socks = await ConnectWithTimeoutAsync(route.UpstreamHost, route.UpstreamPort, 4000, ct).ConfigureAwait(false);
         try
         {
@@ -566,17 +624,17 @@ public sealed class LocalVpnRouterService : IDisposable
         }
     }
 
-    private static async Task PumpBidirectionalAsync(NetworkStream a, NetworkStream b, CancellationToken ct)
+    private async Task PumpBidirectionalAsync(NetworkStream clientStream, NetworkStream upStream, CancellationToken ct)
     {
         using var closeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var t1 = CopyStreamSafeAsync(a, b, closeCts.Token);
-        var t2 = CopyStreamSafeAsync(b, a, closeCts.Token);
-        await Task.WhenAny(t1, t2).ConfigureAwait(false);
+        var tUp = CopyStreamSafeAsync(clientStream, upStream, isDownload: false, closeCts.Token);
+        var tDown = CopyStreamSafeAsync(upStream, clientStream, isDownload: true, closeCts.Token);
+        await Task.WhenAny(tUp, tDown).ConfigureAwait(false);
         closeCts.Cancel();
-        try { await Task.WhenAll(t1, t2).ConfigureAwait(false); } catch { }
+        try { await Task.WhenAll(tUp, tDown).ConfigureAwait(false); } catch { }
     }
 
-    private static async Task CopyStreamSafeAsync(Stream src, Stream dst, CancellationToken ct)
+    private async Task CopyStreamSafeAsync(Stream src, Stream dst, bool isDownload, CancellationToken ct)
     {
         var buf = new byte[32768];
         try
@@ -585,6 +643,16 @@ public sealed class LocalVpnRouterService : IDisposable
             {
                 int read = await src.ReadAsync(buf, ct).ConfigureAwait(false);
                 if (read <= 0) break;
+                if (isDownload)
+                {
+                    Interlocked.Add(ref _bytesDownInterval, read);
+                    Interlocked.Add(ref _totalBytesDown, read);
+                }
+                else
+                {
+                    Interlocked.Add(ref _bytesUpInterval, read);
+                    Interlocked.Add(ref _totalBytesUp, read);
+                }
                 await dst.WriteAsync(buf.AsMemory(0, read), ct).ConfigureAwait(false);
                 await dst.FlushAsync(ct).ConfigureAwait(false);
             }

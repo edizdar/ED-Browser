@@ -2,6 +2,20 @@
 
 ---
 
+## v5.0.0 — Tüm 14 Yeni Nesil Özellik Sürümü
+- 🧩 **Üretkenlik & Sekme Yönetimi:**
+  - **Oturum Kurtarma (`RestoreSessionOnStartup`):** Kapanıp açıldığında son sekmeleri, sabitli sekmeleri ve grupları pasif `0 MB` bellek modunda geri getirir.
+  - **Dikey Sekmeler (`Ctrl+Shift+V`) & Renkli Sekme Grupları:** Sol kenarda katlanabilir dikey sekme paneli ve sağ tık menüsünden renkli sekme grubu atama.
+  - **Bölünmüş Ekran (`Ctrl+Shift+X`):** Tek pencerede iki web sayfasını yan yana gezme ve sol/sağ değiştirme.
+  - **Canlı Omnibox Otomatik Tamamlama:** Yazarken yer imleri, geçmiş ve arama motoru önerilerini gösteren odak çalmayan açılır liste.
+- 🛡️ **Gelişmiş VPN, Gizlilik & Reklam Filtresi:**
+  - **Bölge Filtreli Sunucu Seçici (`Tümü / EU / US / AS`)**, **Canlı Hız Göstergesi (`↓ / ↑ KB/s`)** ve **VPN Kill Switch** (tünel düşerse gerçek IP sızmasını `503` ile keser).
+  - **Dinamik Filtre Listesi (Peter Lowe / EasyList)** güncelleme desteği + **Kozmetik Reklam Gizleme (CSS)** + **Site Bazlı Reklam & HTTPS-Only İstisnaları** (kilit ikonu menüsü).
+- 📖 **Okuma, Medya, Profiller & Sistem:**
+  - **Okuyucu Modu (`Ctrl+Alt+R`)**, **Resim İçinde Resim (PiP) & Medya Merkezi**, **Çoklu Kullanıcı Profilleri (`--profile`)**, **Eklenti Araç Çubuğu Popup İkonları**, **Site Favicon Önbelleği**, **Görev Yöneticisi (`Shift+Esc`)** ve **Uygulama İçi Otomatik Güncelleyici**.
+
+---
+
 ## v4.4.1 — `ERR_TUNNEL_CONNECTION_FAILED` Düzeltmesi, Çoklu Site VPN Doğrulama & Otomatik Yedekli Failover
 - 🐛 **Ücretsiz VPN'de `ERR_TUNNEL_CONNECTION_FAILED` Hatası Giderildi:**
   - Yalnızca `cloudflare.com` testine yanıt verip diğer sitelerde (`ip-adresim.net`, `google.com`) bağlantıyı kesen kısıtlı/bozuk proxy düğümleri artık çoklu hedef HTTPS doğrulaması (`google.com/generate_204` + `cloudflare.com/cdn-cgi/trace`) ile baştan eleniyor.

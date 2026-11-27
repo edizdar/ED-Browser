@@ -21,6 +21,7 @@ public sealed class NewTabPanel : Panel
     private ThemePalette _p = ThemeService.Dark;
     private List<QuickShortcut> _shortcuts = new();
 
+    public Func<string, Image?>? FaviconResolver { get; set; }
     public event Action<string>? NavigateRequested;
     public event Action<string>? OpenNewTabRequested;
     public event Action? ShortcutsChanged;
@@ -67,7 +68,7 @@ public sealed class NewTabPanel : Panel
 
         _subLabel = new Label
         {
-            Text = "Geliştirici: Erol Dizdar  •  Ultra Düşük RAM Sürümü (v4.4.1)",
+            Text = "Geliştirici: Erol Dizdar  •  Ultra Düşük RAM Sürümü (v5.0)",
             Font = new Font("Segoe UI", 9.5f),
             AutoSize = false,
             Size = new Size(680, 24),
@@ -192,9 +193,17 @@ public sealed class NewTabPanel : Panel
             using var gp = GraphicsExt.CreateRoundedRect(r, 12);
             using var br = new SolidBrush(badgeColor);
             e.Graphics.FillPath(br, gp);
-            using var f = new Font("Segoe UI", 14f, FontStyle.Bold);
-            TextRenderer.DrawText(e.Graphics, initial, f, badge.ClientRectangle, Color.White,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            var fav = FaviconResolver?.Invoke(sc.Url);
+            if (fav is not null)
+            {
+                e.Graphics.DrawImage(fav, new Rectangle(11, 11, 20, 20));
+            }
+            else
+            {
+                using var f = new Font("Segoe UI", 14f, FontStyle.Bold);
+                TextRenderer.DrawText(e.Graphics, initial, f, badge.ClientRectangle, Color.White,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            }
         };
 
         var delBtn = new IconButton

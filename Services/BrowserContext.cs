@@ -6,6 +6,8 @@ namespace EDBrowser.Services;
 public sealed class BrowserContext
 {
     public StorageService Storage { get; }
+    public ProfileManagerService Profiles { get; }
+    public FaviconService Favicons { get; }
     public BrowserSettings Settings { get; set; }
     public PasswordVaultService Vault { get; }
     public AdBlockerService AdBlocker { get; }
@@ -19,12 +21,14 @@ public sealed class BrowserContext
     private CoreWebView2Environment? _sharedEnv;
     private readonly SemaphoreSlim _envLock = new(1, 1);
 
-    public BrowserContext()
+    public BrowserContext(string? profileId = null)
     {
-        Storage = new StorageService();
+        Storage = new StorageService(profileId);
+        Profiles = new ProfileManagerService(Storage);
+        Favicons = new FaviconService(Storage);
         Settings = Storage.LoadSettings();
         Vault = new PasswordVaultService(Storage);
-        AdBlocker = new AdBlockerService();
+        AdBlocker = new AdBlockerService(Storage);
         Extensions = new ExtensionService(Storage);
         VpnRouter = new LocalVpnRouterService();
         VpnRouter.Start();

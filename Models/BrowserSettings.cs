@@ -33,27 +33,50 @@ public sealed class VpnProfile
     public string Password { get; set; } = string.Empty;
 }
 
+public sealed class SessionTabState
+{
+    public string Url { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public bool IsPinned { get; set; }
+    public string GroupName { get; set; } = string.Empty;
+    public string GroupColorHex { get; set; } = string.Empty;
+}
+
+public sealed class SavedSession
+{
+    public List<SessionTabState> Tabs { get; set; } = new();
+    public int ActiveIndex { get; set; }
+}
+
 public sealed class BrowserSettings
 {
-    public string Version { get; set; } = "4.4.1";
+    public string Version { get; set; } = "5.0.0";
     public string HomePage { get; set; } = "https://www.google.com";
     public string SearchEngine { get; set; } = "https://www.google.com/search?q=";
     public BrowserTheme Theme { get; set; } = BrowserTheme.Dark;
     public bool ShowBookmarkBar { get; set; } = true;
     public bool ShowLeftSidebar { get; set; } = false;
+    public bool UseVerticalTabs { get; set; } = false;
+    public bool RestoreSessionOnStartup { get; set; } = true;
     public bool AdBlockEnabled { get; set; } = true;
+    public bool CosmeticAdBlockEnabled { get; set; } = true;
+    public List<string> AdBlockWhitelistHosts { get; set; } = new();
+    public List<string> HttpsOnlyBypassHosts { get; set; } = new();
+    public string LastFilterUpdateIso { get; set; } = string.Empty;
     public bool HardwareAcceleration { get; set; } = true;
     public bool BackgroundTabThrottle { get; set; } = true;
     public bool LoadImages { get; set; } = true;
     public bool CheckUpdatesOnStartup { get; set; } = true;
 
-    // v4 RAM optimization settings
+    // v4/v5 RAM optimization settings
     public int AutoSleepMinutes { get; set; } = 2;
     public int DeepUnloadMinutes { get; set; } = 10;
     public int RendererProcessLimit { get; set; } = 2;
 
     // Privacy & VPN / Proxy / DoH settings
     public bool VpnEnabled { get; set; } = false;
+    public bool VpnKillSwitch { get; set; } = false;
+    public string VpnPreferredRegion { get; set; } = "ALL";
     public ProxyMode ProxyMode { get; set; } = ProxyMode.System;
     public string CustomProxy { get; set; } = string.Empty;
     public string ActiveFreeServerUrl { get; set; } = string.Empty;

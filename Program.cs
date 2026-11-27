@@ -69,21 +69,17 @@ internal static class Program
             }
         }
 
-        var context = new BrowserContext();
-        var logPath = Path.Combine(context.Storage.DataDirectory, "edbrowser.log");
-        Application.ThreadException += (_, exArgs) =>
-        {
-            try { File.AppendAllText(logPath, $"[{DateTime.Now:O}] ThreadException: {exArgs.Exception}\n"); } catch { }
-        };
-        AppDomain.CurrentDomain.UnhandledException += (_, exArgs) =>
-        {
-            try { File.AppendAllText(logPath, $"[{DateTime.Now:O}] Unhandled: {exArgs.ExceptionObject}\n"); } catch { }
-        };
-
         bool incognito = args.Any(a => a.Equals("--incognito", StringComparison.OrdinalIgnoreCase));
+        string? profileId = null;
         string? initialUrl = null;
         for (int i = 0; i < args.Length; i++)
         {
+            if (args[i].Equals("--profile", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+            {
+                profileId = args[i + 1];
+                i++;
+                continue;
+            }
             if (args[i].Equals("--benchmark-url", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
             {
                 initialUrl = args[i + 1];
@@ -96,6 +92,17 @@ internal static class Program
             }
         }
 
+        var context = new BrowserContext(profileId);
+        var logPath = Path.Combine(context.Storage.DataDirectory, "edbrowser.log");
+        Application.ThreadException += (_, exArgs) =>
+        {
+            try { File.AppendAllText(logPath, $"[{DateTime.Now:O}] ThreadException: {exArgs.Exception}\n"); } catch { }
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, exArgs) =>
+        {
+            try { File.AppendAllText(logPath, $"[{DateTime.Now:O}] Unhandled: {exArgs.ExceptionObject}\n"); } catch { }
+        };
+
         try
         {
             using var mainForm = new MainForm(context, incognito, initialUrl);
@@ -104,6 +111,7 @@ internal static class Program
         finally
         {
             context.VpnRouter.Dispose();
+            context.Favicons.Dispose();
         }
     }
 }

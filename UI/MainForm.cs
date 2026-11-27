@@ -24,6 +24,7 @@ public sealed class MainForm : Form
 
     // Layout chrome
     private readonly ModernTabBar _tabBar;
+    private readonly VerticalTabBarControl _verticalTabBar;
     private readonly Panel _toolbarPanel;
     private readonly IconButton _btnBack;
     private readonly IconButton _btnFwd;
@@ -34,25 +35,39 @@ public sealed class MainForm : Form
     private readonly IconButton _secBtn;
     private readonly IconButton _vpnBtn;
     private readonly TextBox _urlBox;
+    private readonly IconButton _readerBtn;
     private readonly IconButton _adShieldBtn;
     private readonly IconButton _bmStarBtn;
+    private readonly OmniboxAutocompletePopup _autocompletePopup;
     private bool _omniboxFocused;
+    private bool _suppressAutocomplete;
 
     private readonly Panel _zoomPill;
     private readonly IconButton _zoomOutBtn;
     private readonly IconButton _zoomResetBtn;
     private readonly IconButton _zoomInBtn;
     private readonly IconButton _ramBtn;
+    private readonly IconButton _mediaBtn;
+    private readonly IconButton _splitBtn;
     private readonly IconButton _shotBtn;
     private readonly IconButton _fsBtn;
+    private readonly FlowLayoutPanel _extIconsHost;
     private readonly IconButton _extBtn;
     private readonly IconButton _pwBtn;
     private readonly IconButton _dlBtn;
     private readonly IconButton _bmBtn;
     private readonly IconButton _histBtn;
     private readonly IconButton _incBtn;
+    private readonly IconButton _profileBtn;
     private readonly IconButton _cfgBtn;
     private readonly IconButton _moreBtn;
+
+    private readonly Panel _splitPane;
+    private readonly Splitter _splitSplitter;
+    private readonly Panel _splitHeader;
+    private readonly TextBox _splitUrlBox;
+    private readonly Panel _splitWebHost;
+    private BrowserTab? _splitTab;
 
     private readonly Panel _leftSidebar;
     private readonly List<IconButton> _sidebarButtons = new();
@@ -122,11 +137,12 @@ public sealed class MainForm : Form
         DoubleBuffered = true;
         Icon = LoadEmbeddedIcon();
 
-        // 1. Modern Tab Bar
+        // 1. Modern Tab Bar + Collapsible Vertical Tab Bar
         _tabBar = new ModernTabBar
         {
             IsIncognito = _incognito,
-            Height = 40
+            Height = 40,
+            Visible = !_ctx.Settings.UseVerticalTabs
         };
         _tabBar.TabSelected += id =>
         {
@@ -144,6 +160,28 @@ public sealed class MainForm : Form
             if (t is not null) ShowTabContextMenu(t, pt);
         };
         _tabBar.NewTabClicked += () => _ = AddTabAsync();
+
+        _verticalTabBar = new VerticalTabBarControl
+        {
+            Visible = _ctx.Settings.UseVerticalTabs
+        };
+        _verticalTabBar.TabSelected += id =>
+        {
+            var t = _tabs.FirstOrDefault(x => x.Id == id);
+            if (t is not null) _ = SwitchToTabAsync(t);
+        };
+        _verticalTabBar.TabClosed += id =>
+        {
+            var t = _tabs.FirstOrDefault(x => x.Id == id);
+            if (t is not null) _ = CloseTabAsync(t);
+        };
+        _verticalTabBar.TabRightClicked += (id, pt) =>
+        {
+            var t = _tabs.FirstOrDefault(x => x.Id == id);
+            if (t is not null) ShowTabContextMenu(t, pt);
+        };
+        _verticalTabBar.NewTabClicked += () => _ = AddTabAsync();
+        _verticalTabBar.HorizontalTabsRequested += ToggleVerticalTabs;
 
         // 2. Navigation Toolbar
         _toolbarPanel = new Panel
@@ -207,7 +245,8 @@ public sealed class MainForm : Form
             IconSizePx = 14,
             CornerRadius = 14
         };
-        _secBtn.SetTooltip("Bağlantı Güvenliği");
+        _secBtn.SetTooltip("Site Güvenliği, Reklam & HTTPS İstisnaları");
+        _secBtn.Click += (_, _) => ShowSiteSecurityMenu();
 
         _vpnBtn = new IconButton
         {
@@ -229,24 +268,85 @@ public sealed class MainForm : Form
             PlaceholderText = "Web'de ara veya adres yaz…",
             Anchor = AnchorStyles.Left | AnchorStyles.Right
         };
+        _autocompletePopup = new OmniboxAutocompletePopup(_palette);
+        _autocompletePopup.SuggestionChosen += chosenUrl =>
+        {
+            _autocompletePopup.Hide();
+            _ = NavigateActiveAsync(chosenUrl);
+            _contentHost.Focus();
+        };
+
         _urlBox.GotFocus += (_, _) => { _omniboxFocused = true; _omnibox.Invalidate(); _urlBox.SelectAll(); };
-        _urlBox.LostFocus += (_, _) => { _omniboxFocused = false; _omnibox.Invalidate(); };
+        _urlBox.LostFocus += (_, _) =>
+        {
+            _omniboxFocused = false;
+            _omnibox.Invalidate();
+            BeginInvoke(() =>
+            {
+                if (!IsDisposed && !_urlBox.Focused && !_autocompletePopup.Bounds.Contains(Cursor.Position))
+                    _autocompletePopup.Hide();
+            });
+        };
+        _urlBox.TextChanged += (_, _) =>
+        {
+            if (_suppressAutocomplete || !_urlBox.Focused) return;
+            var txt = _urlBox.Text;
+            if (string.IsNullOrWhiteSpace(txt))
+            {
+                _autocompletePopup.Hide();
+                return;
+            }
+            var screenPt = _omnibox.PointToScreen(new Point(0, _omnibox.Height + 3));
+            _autocompletePopup.UpdateSuggestions(txt, _ctx, screenPt, _omnibox.Width);
+        };
         _urlBox.KeyDown += (_, e) =>
         {
+            if (e.KeyCode == Keys.Down && _autocompletePopup.Visible)
+            {
+                e.SuppressKeyPress = true;
+                _autocompletePopup.MoveSelection(+1);
+                return;
+            }
+            if (e.KeyCode == Keys.Up && _autocompletePopup.Visible)
+            {
+                e.SuppressKeyPress = true;
+                _autocompletePopup.MoveSelection(-1);
+                return;
+            }
             if (e.KeyCode == Keys.Enter)
             {
                 e.SuppressKeyPress = true;
-                _ = NavigateActiveAsync(_urlBox.Text);
+                var target = _autocompletePopup.Visible && !string.IsNullOrEmpty(_autocompletePopup.SelectedUrl)
+                    ? _autocompletePopup.SelectedUrl
+                    : _urlBox.Text;
+                _autocompletePopup.Hide();
+                _ = NavigateActiveAsync(target);
                 _contentHost.Focus();
             }
             else if (e.KeyCode == Keys.Escape)
             {
                 e.SuppressKeyPress = true;
+                _autocompletePopup.Hide();
                 SyncAddressBar();
                 _contentHost.Focus();
             }
         };
         BuildAddressBarContextMenu();
+
+        _readerBtn = new IconButton
+        {
+            IconType = VectorIcon.Book,
+            Dock = DockStyle.Right,
+            Size = new Size(28, 30),
+            IconSizePx = 14,
+            CornerRadius = 14
+        };
+        _readerBtn.SetTooltip("Okuyucu Modu (Ctrl+Alt+R)");
+        _readerBtn.Click += async (_, _) =>
+        {
+            if (_activeTab is not null)
+                await _activeTab.ToggleReaderModeAsync();
+        };
 
         _adShieldBtn = new IconButton
         {
@@ -277,6 +377,7 @@ public sealed class MainForm : Form
         _omnibox.Controls.Add(_urlBox);
         _omnibox.Controls.Add(_vpnBtn);
         _omnibox.Controls.Add(_secBtn);
+        _omnibox.Controls.Add(_readerBtn);
         _omnibox.Controls.Add(_adShieldBtn);
         _omnibox.Controls.Add(_bmStarBtn);
 
@@ -360,20 +461,48 @@ public sealed class MainForm : Form
         };
         _ramBtn.Click += async (_, _) => await OptimizeRamNowAsync();
 
+        _mediaBtn = MakeToolBtn(VectorIcon.MediaPlay, "Medya Merkezi & Resim İçinde Resim (PiP)", (_, _) => ShowMediaHubPopup());
+        _splitBtn = MakeToolBtn(VectorIcon.SplitView, "Bölünmüş Ekran — Yan Yana İki Sayfa (Ctrl+Shift+X)", (_, _) => _ = ToggleSplitViewAsync());
         _shotBtn = MakeToolBtn(VectorIcon.Camera, "Ekran Görüntüsü Al (Ctrl+Shift+S)", (_, _) => ShowScreenshotMenu());
         _fsBtn = MakeToolBtn(VectorIcon.Fullscreen, "Tam Ekran (F11)", (_, _) => ToggleFullscreen());
+
+        _extIconsHost = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Margin = new Padding(0, 1, 0, 0),
+            BackColor = Color.Transparent,
+            Visible = false
+        };
+
         _extBtn = MakeToolBtn(VectorIcon.Puzzle, "Eklentiler ve Uzantı Mağazası (Ctrl+Shift+E)", (_, _) => OpenExtensionsDialog());
         _dlBtn = MakeToolBtn(VectorIcon.Download, "İndirilenler (Ctrl+Shift+J)", (_, _) => _sidePanel.Toggle("dl"));
         _bmBtn = MakeToolBtn(VectorIcon.Bookmark, "Yer İmleri (Ctrl+Shift+O)", (_, _) => _sidePanel.Toggle("bm"));
         _histBtn = MakeToolBtn(VectorIcon.History, "Geçmiş (Ctrl+H)", (_, _) => _sidePanel.Toggle("hist"));
         _pwBtn = MakeToolBtn(VectorIcon.Key, "Şifre Yöneticisi", (_, _) => OpenPasswordManager());
         _incBtn = MakeToolBtn(VectorIcon.Incognito, "Gizli Pencere (Ctrl+Shift+P)", (_, _) => OpenIncognitoWindow());
+
+        var curProf = _ctx.Profiles.GetCurrentProfile();
+        _profileBtn = new IconButton
+        {
+            IconType = VectorIcon.None,
+            LabelText = curProf.Name.Length > 0 ? curProf.Name[..1].ToUpperInvariant() : "V",
+            Size = new Size(30, 30),
+            CornerRadius = 15,
+            Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+            Margin = new Padding(2, 1, 2, 0)
+        };
+        _profileBtn.SetTooltip($"Profil: {curProf.Name} (Değiştir / Yeni Profil)");
+        _profileBtn.Click += (_, _) => ShowProfileMenu();
+
         _cfgBtn = MakeToolBtn(VectorIcon.Settings, "Ayarlar (Ctrl+,)", (_, _) => OpenSettings());
         _moreBtn = MakeToolBtn(VectorIcon.MoreDots, "Menü ve Araçlar", (_, _) => ShowMoreMenu());
 
         rightTools.Controls.AddRange(new Control[]
         {
-            _zoomPill, _ramBtn, _shotBtn, _fsBtn, _extBtn, _dlBtn, _bmBtn, _histBtn, _pwBtn, _incBtn, _cfgBtn, _moreBtn
+            _zoomPill, _ramBtn, _mediaBtn, _splitBtn, _shotBtn, _fsBtn, _extIconsHost, _extBtn, _dlBtn, _bmBtn, _histBtn, _pwBtn, _incBtn, _profileBtn, _cfgBtn, _moreBtn
         });
 
         _toolbarPanel.Controls.Add(_omnibox);
@@ -383,7 +512,23 @@ public sealed class MainForm : Form
         // 3. Bookmarks Bar (Direct mouse-capture drag-and-drop)
         _bookmarkBar = new BookmarkBarControl
         {
-            Visible = _ctx.Settings.ShowBookmarkBar
+            Visible = _ctx.Settings.ShowBookmarkBar,
+            FaviconResolver = url => _ctx.Favicons.GetCached(url)
+        };
+        _ctx.Favicons.FaviconUpdated += _ =>
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            try
+            {
+                BeginInvoke(() =>
+                {
+                    if (IsDisposed) return;
+                    RenderTabs();
+                    _bookmarkBar.Invalidate();
+                    _newTabPanel.Invalidate(true);
+                });
+            }
+            catch { }
         };
         _bookmarkBar.BookmarkClicked += item => _ = NavigateActiveAsync(item.Url);
         _bookmarkBar.BookmarkMiddleClicked += item => _ = AddTabAsync(item.Url);
@@ -422,12 +567,66 @@ public sealed class MainForm : Form
 
         // 4. Content Host + Docked DevTools + SidePanel + FindBar + Password Banner
         _contentHost = new Panel { Dock = DockStyle.Fill };
-        _newTabPanel = new NewTabPanel();
+        _newTabPanel = new NewTabPanel
+        {
+            FaviconResolver = url => _ctx.Favicons.GetCached(url)
+        };
         _newTabPanel.BindShortcuts(_ctx.Shortcuts);
         _newTabPanel.NavigateRequested += q => _ = NavigateActiveAsync(q);
         _newTabPanel.OpenNewTabRequested += u => _ = AddTabAsync(u);
         _newTabPanel.ShortcutsChanged += () => _ctx.Storage.SaveShortcuts(_ctx.Shortcuts);
         _contentHost.Controls.Add(_newTabPanel);
+
+        // Right Split-View Pane (Edge/Vivaldi-style side-by-side browsing)
+        _splitPane = new Panel
+        {
+            Dock = DockStyle.Right,
+            Width = 540,
+            Visible = false
+        };
+        _splitSplitter = new Splitter
+        {
+            Dock = DockStyle.Right,
+            Width = 5,
+            MinExtra = 260,
+            MinSize = 260,
+            Visible = false
+        };
+        _splitHeader = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 36,
+            Padding = new Padding(8, 4, 8, 4)
+        };
+        var spClose = new IconButton { IconType = VectorIcon.Close, Dock = DockStyle.Right, Size = new Size(26, 26), IconSizePx = 11 };
+        spClose.SetTooltip("Bölünmüş Ekranı Kapat (Ctrl+Shift+X)");
+        spClose.Click += (_, _) => _ = ToggleSplitViewAsync();
+        var spSwap = new IconButton { IconType = VectorIcon.SplitView, Dock = DockStyle.Right, Size = new Size(26, 26), IconSizePx = 13 };
+        spSwap.SetTooltip("Sol ve Sağ Sayfayı Değiştir");
+        spSwap.Click += async (_, _) => await SwapSplitViewsAsync();
+        var spGo = new IconButton { IconType = VectorIcon.ArrowRight, Dock = DockStyle.Right, Size = new Size(26, 26), IconSizePx = 12 };
+        spGo.Click += (_, _) => _ = NavigateSplitAsync(_splitUrlBox.Text);
+        var spReload = new IconButton { IconType = VectorIcon.Reload, Dock = DockStyle.Left, Size = new Size(26, 26), IconSizePx = 12 };
+        spReload.Click += (_, _) => _splitTab?.ReloadOrStop();
+        _splitUrlBox = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            BorderStyle = BorderStyle.FixedSingle,
+            Font = new Font("Segoe UI", 8.75f),
+            PlaceholderText = "İkinci pencere için adres veya arama…"
+        };
+        _splitUrlBox.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true;
+                _ = NavigateSplitAsync(_splitUrlBox.Text);
+            }
+        };
+        _splitHeader.Controls.AddRange(new Control[] { _splitUrlBox, spGo, spSwap, spClose, spReload });
+        _splitWebHost = new Panel { Dock = DockStyle.Fill };
+        _splitPane.Controls.Add(_splitWebHost);
+        _splitPane.Controls.Add(_splitHeader);
 
         _devToolsPanel = new DevToolsPanel
         {
@@ -547,18 +746,30 @@ public sealed class MainForm : Form
         };
         _updateDlBtn = new ModernButton
         {
-            Text = "İndir",
+            Text = "Otomatik Güncelle",
             Primary = true,
             Dock = DockStyle.Right,
-            Width = 88,
+            Width = 148,
             Height = 30
         };
-        _updateDlBtn.Click += (_, _) =>
+        _updateDlBtn.Click += async (_, _) =>
         {
             var target = _updateDownloadUrl ?? _updateReleaseUrl;
-            if (!string.IsNullOrEmpty(target))
+            if (string.IsNullOrEmpty(target)) return;
+            _updateDlBtn.Enabled = false;
+            var prog = new Progress<int>(pct => _updateDlBtn.Text = $"İndiriliyor %{pct}");
+            var res = await UpdateService.DownloadAndApplyUpdateAsync(target, _ctx.Storage.IsInstalledMode, prog);
+            if (!res.Ok)
+            {
+                _updateDlBtn.Enabled = true;
+                _updateDlBtn.Text = "Otomatik Güncelle";
                 _ = AddTabAsync(target);
-            _updateBanner.Visible = false;
+                _updateBanner.Visible = false;
+            }
+            else
+            {
+                Close();
+            }
         };
         _updateNotesBtn = new ModernButton
         {
@@ -675,6 +886,9 @@ public sealed class MainForm : Form
         _leftSidebar.Controls.Add(sideStack);
 
         Controls.Add(_contentHost);
+        Controls.Add(_splitSplitter);
+        Controls.Add(_splitPane);
+        Controls.Add(_verticalTabBar);
         Controls.Add(_leftSidebar);
         Controls.Add(_devToolsSplitter);
         Controls.Add(_devToolsPanel);
@@ -696,6 +910,7 @@ public sealed class MainForm : Form
 
         ApplyTheme();
         RenderBookmarksBar();
+        RefreshPinnedExtensionsStrip();
         LayoutOmniboxText();
 
         _memoryTimer = new System.Windows.Forms.Timer { Interval = 5000 };
@@ -709,6 +924,14 @@ public sealed class MainForm : Form
             if (skipInitialNavigate)
             {
                 await AddTabAsync(null);
+            }
+            else if (!_incognito && string.IsNullOrWhiteSpace(initialUrl) && _ctx.Settings.RestoreSessionOnStartup)
+            {
+                bool restored = await RestorePreviousSessionAsync();
+                if (!restored)
+                    await AddTabAsync(_ctx.Settings.HomePage);
+                if (_ctx.Settings.VpnEnabled && _ctx.Settings.ProxyMode == ProxyMode.FreeCommunity)
+                    _ = EnsureHealthyFreeServerOnStartupAsync();
             }
             else
             {
@@ -730,7 +953,7 @@ public sealed class MainForm : Form
     private void LayoutOmniboxText()
     {
         int left = _vpnBtn.Right + 6;
-        int right = _adShieldBtn.Left - 4;
+        int right = _readerBtn.Left - 4;
         int h = _urlBox.PreferredHeight;
         _urlBox.Location = new Point(left, Math.Max(2, (_omnibox.Height - h) / 2));
         _urlBox.Width = Math.Max(60, right - left);
@@ -825,6 +1048,8 @@ public sealed class MainForm : Form
         AdBlockEnabled = _ctx.Settings.AdBlockEnabled,
         ShowBookmarkBar = _ctx.Settings.ShowBookmarkBar,
         ShowLeftSidebar = _ctx.Settings.ShowLeftSidebar,
+        UseVerticalTabs = _ctx.Settings.UseVerticalTabs,
+        IsSplitViewActive = _splitPane.Visible,
         IsActiveTabPinned = _activeTab?.IsPinned ?? false,
         IsActiveTabMuted = _activeTab?.IsMuted ?? false,
         CanReopenClosedTab = _closedTabUrls.Count > 0,
@@ -841,6 +1066,11 @@ public sealed class MainForm : Form
         OpenBookmarks = () => _sidePanel.Toggle("bm"),
         ToggleBookmarkBar = ToggleBookmarkBarVisibility,
         ToggleLeftSidebar = ToggleLeftSidebarVisibility,
+        ToggleVerticalTabs = ToggleVerticalTabs,
+        ToggleSplitView = () => _ = ToggleSplitViewAsync(),
+        ToggleReaderMode = () => { if (_activeTab is not null) _ = _activeTab.ToggleReaderModeAsync(); },
+        OpenTaskManager = OpenTaskManager,
+        OpenProfiles = ShowProfileMenu,
         OpenHistory = () => _sidePanel.Toggle("hist"),
         OpenDownloads = () => _sidePanel.Toggle("dl"),
         OpenExtensions = OpenExtensionsDialog,
@@ -975,7 +1205,7 @@ public sealed class MainForm : Form
 
     private void RenderTabs()
     {
-        _tabBar.SetTabs(_tabs.Select(t => new ModernTabItem
+        var items = _tabs.Select(t => new ModernTabItem
         {
             Id = t.Id,
             Title = string.IsNullOrWhiteSpace(t.Title) ? "Yeni Sekme" : t.Title,
@@ -985,8 +1215,15 @@ public sealed class MainForm : Form
             DeepUnloaded = t.IsDeepUnloaded,
             Pinned = t.IsPinned,
             PlayingAudio = t.IsPlayingAudio,
-            Muted = t.IsMuted
-        }));
+            Muted = t.IsMuted,
+            GroupName = t.GroupName,
+            GroupColor = t.GroupColor,
+            Favicon = string.IsNullOrEmpty(t.Url) ? null : _ctx.Favicons.GetCached(t.Url)
+        }).ToList();
+
+        _tabBar.SetTabs(items);
+        _verticalTabBar.SetTabs(items);
+        UpdateMediaBadge();
     }
 
     private void ShowTabContextMenu(BrowserTab tab, Point screenPos)
@@ -998,6 +1235,48 @@ public sealed class MainForm : Form
             tab.IsPinned = !tab.IsPinned;
             ReorderPinnedTabs();
         });
+
+        var grpSub = new ToolStripMenuItem("Sekme Grubu");
+        var presetGroups = new (string Name, Color Color)[]
+        {
+            ("İş", Color.FromArgb(56, 189, 248)),
+            ("Araştırma", Color.FromArgb(168, 85, 247)),
+            ("Alışveriş", Color.FromArgb(16, 185, 129)),
+            ("Eğlence", Color.FromArgb(245, 158, 11)),
+            ("Önemli", Color.FromArgb(239, 68, 68))
+        };
+        foreach (var pg in presetGroups)
+        {
+            var gItem = pg;
+            grpSub.DropDownItems.Add(gItem.Name, null, (_, _) =>
+            {
+                tab.GroupName = gItem.Name;
+                tab.GroupColor = gItem.Color;
+                RenderTabs();
+            });
+        }
+        grpSub.DropDownItems.Add("Özel Grup Adı…", null, (_, _) =>
+        {
+            var name = PromptDialog.Show(this, "Sekme Grubu", "Grup adı:", tab.GroupName, _palette);
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                tab.GroupName = name.Trim();
+                if (tab.GroupColor.IsEmpty) tab.GroupColor = _palette.Accent;
+                RenderTabs();
+            }
+        });
+        if (!string.IsNullOrEmpty(tab.GroupName))
+        {
+            grpSub.DropDownItems.Add(new ToolStripSeparator());
+            grpSub.DropDownItems.Add("Gruptan Çıkar", null, (_, _) =>
+            {
+                tab.GroupName = "";
+                tab.GroupColor = Color.Empty;
+                RenderTabs();
+            });
+        }
+        menu.Items.Add(grpSub);
+
         if (tab.HasNavigated)
         {
             menu.Items.Add(tab.IsMuted ? "Sekme Sesini Aç" : "Sekme Sesini Kapat", null, (_, _) => tab.ToggleMute());
@@ -1048,7 +1327,11 @@ public sealed class MainForm : Form
     {
         if (_activeTab is null) return;
         if (!_urlBox.Focused)
+        {
+            _suppressAutocomplete = true;
             _urlBox.Text = _activeTab.Url;
+            _suppressAutocomplete = false;
+        }
 
         var u = _activeTab.Url;
         if (u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
@@ -1077,11 +1360,18 @@ public sealed class MainForm : Form
 
     private void UpdateAdShieldBadge()
     {
-        bool enabled = _ctx.Settings.AdBlockEnabled;
-        _adShieldBtn.IconColor = enabled ? _palette.Green : _palette.TextMuted;
-        _adShieldBtn.SetTooltip(enabled
-            ? $"Reklam Engelleyici Aktif (Bu sekme: {_activeTab?.BlockedOnTab ?? 0} | Toplam: {_ctx.AdBlocker.TotalBlockedCount}) — Tıkla kapat"
-            : "Reklam Engelleyici Kapalı — Tıkla aç");
+        var curHost = TryGetHost(_activeTab?.Url);
+        bool sitePaused = !string.IsNullOrEmpty(curHost) &&
+                          _ctx.Settings.AdBlockWhitelistHosts.Contains(curHost, StringComparer.OrdinalIgnoreCase);
+        bool enabled = _ctx.Settings.AdBlockEnabled && !sitePaused;
+        _adShieldBtn.IconColor = sitePaused
+            ? Color.FromArgb(245, 158, 11)
+            : (enabled ? _palette.Green : _palette.TextMuted);
+        _adShieldBtn.SetTooltip(sitePaused
+            ? $"Reklam Engelleyici bu sitede duraklatıldı ({curHost})"
+            : enabled
+                ? $"Reklam Engelleyici Aktif ({_ctx.AdBlocker.TotalRuleCount:N0} kural • Bu sekme: {_activeTab?.BlockedOnTab ?? 0}) — Tıkla kapat"
+                : "Reklam Engelleyici Kapalı — Tıkla aç");
         UpdateVpnBadge();
     }
 
@@ -1721,6 +2011,7 @@ public sealed class MainForm : Form
             url => _ = AddTabAsync(url),
             _palette);
         dlg.ShowDialog(this);
+        RefreshPinnedExtensionsStrip();
     }
 
     private void UpdateExtensionStoreBanner()
@@ -2009,6 +2300,10 @@ public sealed class MainForm : Form
             return true;
         }
         if (mods == (Keys.Control | Keys.Shift) && key == Keys.L) { ToggleLeftSidebarVisibility(); return true; }
+        if (mods == (Keys.Control | Keys.Shift) && key == Keys.V) { ToggleVerticalTabs(); return true; }
+        if (mods == (Keys.Control | Keys.Shift) && key == Keys.X) { _ = ToggleSplitViewAsync(); return true; }
+        if (mods == (Keys.Control | Keys.Alt) && key == Keys.R) { if (_activeTab is not null) _ = _activeTab.ToggleReaderModeAsync(); return true; }
+        if (mods == Keys.Shift && key == Keys.Escape) { OpenTaskManager(); return true; }
         if (mods == (Keys.Control | Keys.Shift) && key == Keys.E) { OpenExtensionsDialog(); return true; }
         if (mods == (Keys.Control | Keys.Shift) && key == Keys.J) { _sidePanel.Toggle("dl"); return true; }
         if (mods == (Keys.Control | Keys.Shift) && key == Keys.S) { ShowScreenshotMenu(); return true; }
@@ -2054,6 +2349,7 @@ public sealed class MainForm : Form
         ForeColor = _palette.TextPrimary;
 
         _tabBar.ApplyTheme(_palette);
+        _verticalTabBar.ApplyTheme(_palette);
         _toolbarPanel.BackColor = _palette.SurfaceBg;
         _omnibox.BackColor = _palette.SurfaceBg;
         _urlBox.BackColor = _palette.BaseBg;
@@ -2069,10 +2365,24 @@ public sealed class MainForm : Form
         _secBtn.NormalBg = _palette.BaseBg;
         _secBtn.HoverBg = _palette.ElevatedBg;
         UpdateVpnBadge();
+        _readerBtn.NormalBg = _palette.BaseBg;
+        _readerBtn.HoverBg = _palette.ElevatedBg;
+        _readerBtn.IconColor = (_activeTab?.IsReaderMode ?? false) ? _palette.Accent : _palette.TextSecondary;
         _adShieldBtn.NormalBg = _palette.BaseBg;
         _adShieldBtn.HoverBg = _palette.ElevatedBg;
         _bmStarBtn.NormalBg = _palette.BaseBg;
         _bmStarBtn.HoverBg = _palette.ElevatedBg;
+
+        _profileBtn.NormalBg = _palette.ElevatedBg;
+        _profileBtn.HoverBg = _palette.HoverBg;
+        _profileBtn.IconColor = _palette.Accent;
+        _profileBtn.BorderColor = _palette.Border;
+
+        _splitPane.BackColor = _palette.BaseBg;
+        _splitHeader.BackColor = _palette.SurfaceBg;
+        _splitSplitter.BackColor = _palette.Border;
+        _splitUrlBox.BackColor = _palette.BaseBg;
+        _splitUrlBox.ForeColor = _palette.TextPrimary;
 
         _ramBtn.NormalBg = _palette.ElevatedBg;
         _ramBtn.HoverBg = _palette.HoverBg;
@@ -2260,7 +2570,7 @@ public sealed class MainForm : Form
             bool ok = !string.IsNullOrWhiteSpace(curUrl) && await ProxyService.VerifyRelayMultiSiteAsync(curUrl, 3500);
             if (!ok || !_ctx.VpnRouter.HasFailoverRoutes)
             {
-                var found = await ProxyService.DiscoverVerifiedFreeRelaysAsync(8);
+                var found = await ProxyService.DiscoverVerifiedFreeRelaysAsync(8, _ctx.Settings.VpnPreferredRegion);
                 if (IsDisposed || found.Count == 0) return;
 
                 _ctx.VpnRouter.SetFreeFailoverPool(found);
@@ -2283,14 +2593,315 @@ public sealed class MainForm : Form
         catch { }
     }
 
+    // ── v5 ADVANCED FEATURES (SITE EXCEPTIONS, SPLIT VIEW, PROFILES, MEDIA, SESSION, TASK MGR) ──
+    private static string TryGetHost(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return string.Empty;
+        return Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Host : string.Empty;
+    }
+
+    private void ShowSiteSecurityMenu()
+    {
+        var host = TryGetHost(_activeTab?.Url);
+        var menu = new ContextMenuStrip { Renderer = new ModernMenuRenderer(_palette), ShowImageMargin = false, Padding = new Padding(4) };
+        var titleItem = new ToolStripMenuItem(string.IsNullOrEmpty(host) ? "Yeni Sekme (Yerel)" : $"Site: {host}") { Enabled = false };
+        menu.Items.Add(titleItem);
+
+        if (!string.IsNullOrEmpty(host))
+        {
+            bool adPaused = _ctx.Settings.AdBlockWhitelistHosts.Contains(host, StringComparer.OrdinalIgnoreCase);
+            menu.Items.Add(adPaused ? $"Bu Sitede Reklam Engelleyiciyi Aç ({host})" : $"Bu Sitede Reklam Engelleyiciyi Duraklat ({host})", null, (_, _) =>
+            {
+                if (adPaused)
+                    _ctx.Settings.AdBlockWhitelistHosts.RemoveAll(x => x.Equals(host, StringComparison.OrdinalIgnoreCase));
+                else
+                    _ctx.Settings.AdBlockWhitelistHosts.Add(host);
+                _ctx.Storage.SaveSettings(_ctx.Settings);
+                UpdateAdShieldBadge();
+                _activeTab?.ReloadOrStop();
+            });
+
+            bool httpsBypass = _ctx.Settings.HttpsOnlyBypassHosts.Contains(host, StringComparer.OrdinalIgnoreCase);
+            menu.Items.Add(httpsBypass ? "HTTPS-Only Zorlamasını Aç" : "Bu Sitede HTTP Bağlantısına İzin Ver", null, (_, _) =>
+            {
+                if (httpsBypass)
+                    _ctx.Settings.HttpsOnlyBypassHosts.RemoveAll(x => x.Equals(host, StringComparison.OrdinalIgnoreCase));
+                else
+                    _ctx.Settings.HttpsOnlyBypassHosts.Add(host);
+                _ctx.Storage.SaveSettings(_ctx.Settings);
+            });
+        }
+
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("VPN & Gizlilik Kalkanını Aç", null, (_, _) => ShowVpnPrivacyPopup());
+        menu.Items.Add("Okuyucu Modu (Ctrl+Alt+R)", null, async (_, _) =>
+        {
+            if (_activeTab is not null) await _activeTab.ToggleReaderModeAsync();
+        });
+
+        var r = _secBtn.RectangleToScreen(_secBtn.ClientRectangle);
+        menu.Show(new Point(r.Left, r.Bottom + 4));
+    }
+
+    private void UpdateMediaBadge()
+    {
+        bool anyAudio = _tabs.Any(t => t.IsPlayingAudio);
+        _mediaBtn.IconColor = anyAudio ? _palette.Accent : _palette.TextSecondary;
+    }
+
+    private void ShowMediaHubPopup()
+    {
+        var menu = new ContextMenuStrip { Renderer = new ModernMenuRenderer(_palette), ShowImageMargin = false, Padding = new Padding(4) };
+        var audioTabs = _tabs.Where(t => t.IsPlayingAudio || t.IsMuted || t.HasNavigated).Take(8).ToList();
+        if (audioTabs.Count == 0)
+        {
+            menu.Items.Add("Oynatılan medya yok").Enabled = false;
+        }
+        else
+        {
+            foreach (var tab in audioTabs)
+            {
+                var t = tab;
+                var label = string.IsNullOrWhiteSpace(t.Title) ? t.Url : t.Title;
+                if (label.Length > 34) label = label[..34] + "…";
+                var sub = new ToolStripMenuItem($"{(t.IsMuted ? "Sessiz" : t.IsPlayingAudio ? "Çalıyor" : "Sekme")} • {label}");
+                sub.DropDownItems.Add("Oynat / Duraklat", null, async (_, _) => await t.ToggleMediaPlayPauseAsync());
+                sub.DropDownItems.Add(t.IsMuted ? "Sesi Aç" : "Sesi Kapat", null, (_, _) => t.ToggleMute());
+                sub.DropDownItems.Add("Resim İçinde Resim (PiP)", null, async (_, _) => await t.TogglePictureInPictureAsync());
+                sub.DropDownItems.Add("Sekmeye Git", null, async (_, _) => await SwitchToTabAsync(t));
+                menu.Items.Add(sub);
+            }
+        }
+        var r = _mediaBtn.RectangleToScreen(_mediaBtn.ClientRectangle);
+        menu.Show(new Point(r.Left, r.Bottom + 4));
+    }
+
+    private void RefreshPinnedExtensionsStrip()
+    {
+        _extIconsHost.Controls.Clear();
+        var pinned = _ctx.Extensions.Items.Where(e => e.Enabled && !string.IsNullOrEmpty(e.PopupPath)).Take(3).ToList();
+        _extIconsHost.Visible = pinned.Count > 0;
+        foreach (var ext in pinned)
+        {
+            var eItem = ext;
+            var btn = new IconButton
+            {
+                IconType = VectorIcon.Puzzle,
+                Size = new Size(28, 30),
+                IconSizePx = 14,
+                CornerRadius = 7,
+                NormalBg = _palette.SurfaceBg,
+                HoverBg = _palette.HoverBg,
+                IconColor = _palette.Accent,
+                Margin = new Padding(1, 0, 1, 0)
+            };
+            btn.SetTooltip($"{eItem.Name} (Aç)");
+            btn.Click += (_, _) =>
+            {
+                var pt = btn.RectangleToScreen(btn.ClientRectangle);
+                var pop = new ExtensionPopupForm(_ctx, eItem, _palette, new Point(pt.Right, pt.Bottom + 6));
+                pop.Show(this);
+            };
+            _extIconsHost.Controls.Add(btn);
+        }
+    }
+
+    private void ShowProfileMenu()
+    {
+        var menu = new ContextMenuStrip { Renderer = new ModernMenuRenderer(_palette), ShowImageMargin = false, Padding = new Padding(4) };
+        var profiles = _ctx.Profiles.LoadProfiles();
+        var curId = _ctx.Storage.ActiveProfileId;
+
+        foreach (var prof in profiles)
+        {
+            var p = prof;
+            bool isCur = p.Id.Equals(curId, StringComparison.OrdinalIgnoreCase);
+            var mi = new ToolStripMenuItem($"{(isCur ? "✓ " : "")}{p.Name}") { Enabled = !isCur };
+            mi.Click += (_, _) => ProfileManagerService.LaunchProfileWindow(p.Id);
+            menu.Items.Add(mi);
+        }
+
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("+ Yeni Profil Oluştur…", null, (_, _) =>
+        {
+            var name = PromptDialog.Show(this, "Yeni Kullanıcı Profili", "Profil adı (ör: İş, Kişisel, Test):", "", _palette);
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                var created = _ctx.Profiles.CreateProfile(name.Trim());
+                ProfileManagerService.LaunchProfileWindow(created.Id);
+            }
+        });
+        if (!curId.Equals("default", StringComparison.OrdinalIgnoreCase))
+        {
+            menu.Items.Add("Bu Profili Sil", null, (_, _) =>
+            {
+                if (_ctx.Profiles.DeleteProfile(curId))
+                    ShowToast("Profil Silindi", "Bu pencere kapatılabilir.");
+            });
+        }
+
+        var r = _profileBtn.RectangleToScreen(_profileBtn.ClientRectangle);
+        menu.Show(new Point(r.Right - 180, r.Bottom + 4));
+    }
+
+    private void OpenTaskManager()
+    {
+        using var dlg = new TaskManagerDialog(
+            _palette,
+            () => _tabs.AsReadOnly(),
+            CloseTabAsync,
+            RefreshMemoryBadge);
+        dlg.ShowDialog(this);
+    }
+
+    private void ToggleVerticalTabs()
+    {
+        _ctx.Settings.UseVerticalTabs = !_ctx.Settings.UseVerticalTabs;
+        _ctx.Storage.SaveSettings(_ctx.Settings);
+        _verticalTabBar.Visible = _ctx.Settings.UseVerticalTabs;
+        _tabBar.Visible = !_ctx.Settings.UseVerticalTabs;
+        RenderTabs();
+    }
+
+    private async Task ToggleSplitViewAsync()
+    {
+        if (_splitPane.Visible)
+        {
+            _splitPane.Visible = false;
+            _splitSplitter.Visible = false;
+            _splitBtn.IsActive = false;
+            return;
+        }
+
+        _splitPane.Width = Math.Max(340, Width / 2 - 40);
+        _splitSplitter.Visible = true;
+        _splitPane.Visible = true;
+        _splitBtn.IsActive = true;
+        _contentHost.BringToFront();
+
+        if (_splitTab is null)
+        {
+            _splitTab = new BrowserTab(_ctx, _splitWebHost, _incognito, _incognitoDir);
+            _splitTab.StateChanged += t => BeginInvoke(() =>
+            {
+                if (!_splitUrlBox.Focused && !string.IsNullOrWhiteSpace(t.Url))
+                    _splitUrlBox.Text = t.Url;
+            });
+            _splitTab.OpenNewTabRequested += (_t, u) => BeginInvoke(() => { _ = AddTabAsync(u); });
+            var startUrl = !string.IsNullOrWhiteSpace(_activeTab?.Url) ? _activeTab.Url : _ctx.Settings.HomePage;
+            _splitUrlBox.Text = startUrl;
+            await _splitTab.NavigateAsync(startUrl);
+        }
+        else
+        {
+            await _splitTab.ActivateAsync();
+        }
+    }
+
+    private async Task NavigateSplitAsync(string input)
+    {
+        if (_splitTab is null) return;
+        var target = _ctx.NormalizeUrlOrSearch(input);
+        if (string.IsNullOrWhiteSpace(target)) return;
+        await _splitTab.NavigateAsync(target);
+    }
+
+    private async Task SwapSplitViewsAsync()
+    {
+        if (_activeTab is null || _splitTab is null) return;
+        var leftUrl = _activeTab.Url;
+        var rightUrl = _splitTab.Url;
+        if (!string.IsNullOrWhiteSpace(rightUrl))
+            await NavigateActiveAsync(rightUrl);
+        if (!string.IsNullOrWhiteSpace(leftUrl))
+            await NavigateSplitAsync(leftUrl);
+    }
+
+    private void SaveCurrentSession()
+    {
+        if (_incognito) return;
+        try
+        {
+            var sess = new SavedSession
+            {
+                ActiveIndex = _activeTab is null ? 0 : Math.Max(0, _tabs.IndexOf(_activeTab))
+            };
+            foreach (var t in _tabs)
+            {
+                sess.Tabs.Add(new SessionTabState
+                {
+                    Url = t.Url,
+                    Title = t.Title,
+                    IsPinned = t.IsPinned,
+                    GroupName = t.GroupName,
+                    GroupColorHex = t.GroupColor.IsEmpty ? "" : ColorTranslator.ToHtml(t.GroupColor)
+                });
+            }
+            _ctx.Storage.SaveSession(sess);
+        }
+        catch { }
+    }
+
+    private async Task<bool> RestorePreviousSessionAsync()
+    {
+        var sess = _ctx.Storage.LoadSession();
+        if (sess.Tabs.Count == 0 || !sess.Tabs.Any(x => !string.IsNullOrWhiteSpace(x.Url)))
+            return false;
+
+        int activeIdx = Math.Clamp(sess.ActiveIndex, 0, sess.Tabs.Count - 1);
+        for (int i = 0; i < sess.Tabs.Count; i++)
+        {
+            var st = sess.Tabs[i];
+            var tab = new BrowserTab(_ctx, _contentHost, _incognito, _incognitoDir)
+            {
+                IsPinned = st.IsPinned,
+                GroupName = st.GroupName
+            };
+            if (!string.IsNullOrWhiteSpace(st.GroupColorHex))
+            {
+                try { tab.GroupColor = ColorTranslator.FromHtml(st.GroupColorHex); } catch { }
+            }
+            tab.StateChanged += t => BeginInvoke(() => OnTabStateChanged(t));
+            tab.OpenNewTabRequested += (_t, u) => BeginInvoke(() => { _ = AddTabAsync(u); });
+            tab.UrlNavigated += (t, u) => BeginInvoke(() => { _ = CheckPasswordFillAsync(t, u); });
+            tab.DownloadStarted += (_, _) => BeginInvoke(() => _sidePanel.RefreshIfOpen("dl"));
+            tab.DownloadUpdated += (_, _) => BeginInvoke(() => _sidePanel.RefreshIfOpen("dl"));
+            tab.DownloadCompleted += (_, rec) => BeginInvoke(() => OnDownloadCompleted(rec));
+            tab.PasswordOfferRequested += (_, payload) => BeginInvoke(() => ShowPasswordSaveOffer(payload));
+            tab.AcceleratorForwarded += combo => BeginInvoke(() => HandleShortcut(combo));
+            tab.FindRequested += () => BeginInvoke(ToggleFindBar);
+            tab.BookmarkRequested += () => BeginInvoke(ToggleCurrentBookmark);
+            tab.ZoomChanged += (t, _) => BeginInvoke(() => { if (t == _activeTab) SyncZoomBadge(); });
+            tab.InspectRequested += (x, y) => BeginInvoke(() => { _ = InspectElementInDevToolsAsync(x, y); });
+            tab.ViewSourceRequested += () => BeginInvoke(() => { _ = ViewPageSourceAsync(); });
+            tab.DevToolsElementPicked += json => BeginInvoke(() => { _ = HandleDevToolsElementPickedAsync(json); });
+
+            _tabs.Add(tab);
+            if (i == activeIdx && !string.IsNullOrWhiteSpace(st.Url))
+                await tab.NavigateAsync(st.Url);
+            else if (!string.IsNullOrWhiteSpace(st.Url))
+                tab.SetRestoredStub(st.Title, st.Url);
+        }
+
+        if (_tabs.Count > 0)
+        {
+            await SwitchToTabAsync(_tabs[Math.Clamp(activeIdx, 0, _tabs.Count - 1)]);
+            return true;
+        }
+        return false;
+    }
+
     private void CleanupOnExit()
     {
+        SaveCurrentSession();
         _ctx.VpnRouter.FailoverServerPromoted -= OnVpnFailoverPromoted;
         _memoryTimer.Stop();
+        _autocompletePopup.Dispose();
         _activeAppMenu?.SafeClose();
         _activeVpnPopup?.SafeClose();
         _bmHoverTimer?.Stop();
         _bmHoverTimer?.Dispose();
+        _splitTab?.Dispose();
         if (_notifyIcon is not null)
         {
             _notifyIcon.Visible = false;
@@ -2619,8 +3230,77 @@ public sealed class MainForm : Form
 
                 Assert(respHead.Contains("200") && tunnelPayload == "TUNNEL_FAILOVER_OK" && promoted?.CountryCode == "DE",
                     "LocalVpnRouterService automatically fails over dead FreeCommunity relay and promotes healthy backup");
+
+                // 9. Test Kill Switch (503 leak prevention) & Live Bandwidth Counter
+                router.ApplySettings(new BrowserSettings { VpnEnabled = true, VpnKillSwitch = true, ProxyMode = ProxyMode.FreeCommunity, ActiveFreeServerUrl = "" });
+                bool ksFlag = router.IsKillSwitchBlocking;
+                using var ksClient = new System.Net.Sockets.TcpClient();
+                ksClient.Connect(System.Net.IPAddress.Loopback, router.ListenPort);
+                using var ksStream = ksClient.GetStream();
+                var ksReq = System.Text.Encoding.ASCII.GetBytes("CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n");
+                ksStream.Write(ksReq, 0, ksReq.Length);
+                var ksRespBuf = new byte[256];
+                int ksLen = ksStream.Read(ksRespBuf, 0, ksRespBuf.Length);
+                var ksResp = System.Text.Encoding.ASCII.GetString(ksRespBuf, 0, ksLen);
+                router.RecordTrafficForTest(4096, 1024);
+                var bw = router.SampleBandwidth();
+                Assert(ksFlag && ksResp.Contains("503") && bw.TotalDown >= 4096 && bw.TotalUp >= 1024,
+                    "LocalVpnRouterService Kill Switch blocks direct leak (503) & bandwidth meter counts bytes");
             }
 
+            // 10. Test Session Restore roundtrip + Multi-Profile Isolation + AdBlock Whitelist & EasyList parser
+            var testProfId = "testprof_" + Guid.NewGuid().ToString("N")[..6];
+            var profStorage = new StorageService(testProfId);
+            profStorage.SaveSession(new SavedSession
+            {
+                ActiveIndex = 1,
+                Tabs = new()
+                {
+                    new() { Url = "https://github.com", Title = "GitHub", GroupName = "İş", GroupColorHex = "#38BDF8" },
+                    new() { Url = "https://google.com", Title = "Google", IsPinned = true }
+                }
+            });
+            var loadedSess = profStorage.LoadSession();
+            Assert(profStorage.ActiveProfileId == StorageService.SanitizeProfileId(testProfId) &&
+                   loadedSess.Tabs.Count == 2 && loadedSess.ActiveIndex == 1 && loadedSess.Tabs[0].GroupName == "İş",
+                "Multi-profile isolated StorageService & Session Restore roundtrip verified");
+            try { if (Directory.Exists(profStorage.DataDirectory)) Directory.Delete(profStorage.DataDirectory, true); } catch { }
+
+            var ab = new AdBlockerService();
+            var parsedRules = AdBlockerService.ParseDomainFilterLines(new[] { "||ads.testdomain.org^", "0.0.0.0 tracker.badsite.net", "# comment" });
+            bool wlSkip = ab.ShouldBlock("https://doubleclick.net/ad.js", "example.com", new[] { "example.com" });
+            bool wlBlock = ab.ShouldBlock("https://doubleclick.net/ad.js", "other.com", new[] { "example.com" });
+            Assert(parsedRules.Contains("ads.testdomain.org") && parsedRules.Contains("tracker.badsite.net") && !wlSkip && wlBlock &&
+                   AdBlockerService.CosmeticHideCss.Contains("adsbygoogle"),
+                "AdBlockerService EasyList parser, per-site whitelist & cosmetic CSS verified");
+
+            // 11. Test v5 UI controls (VerticalTabBarControl, OmniboxAutocompletePopup, TaskManagerDialog)
+            using (var vHost = new Form { StartPosition = FormStartPosition.Manual, Location = new Point(-32000, -32000), Size = new Size(400, 500), ShowInTaskbar = false })
+            using (var vBar = new VerticalTabBarControl())
+            {
+                vBar.SetTabs(new[] { new ModernTabItem { Id = "1", Title = "Test", Active = true, GroupName = "İş", GroupColor = ThemeService.Dark.Accent } });
+                vHost.Controls.Add(vBar);
+                vHost.Show();
+                vBar.ToggleCollapsed();
+                vBar.ToggleCollapsed();
+                Assert(vBar.Width >= 200, "VerticalTabBarControl renders, supports groups & toggles collapsed state");
+                vHost.Close();
+            }
+
+            var acList = OmniboxAutocompletePopup.BuildLocalSuggestions("git", dummyCtx);
+            Assert(acList.Count >= 1, "OmniboxAutocompletePopup builds merged local + search suggestions");
+
+            using (var tm = new TaskManagerDialog(ThemeService.Dark, () => Array.Empty<BrowserTab>(), _ => Task.CompletedTask, () => { }))
+            {
+                tm.StartPosition = FormStartPosition.Manual;
+                tm.Location = new Point(-32000, -32000);
+                tm.Show();
+                Application.DoEvents();
+                Assert(tm.Visible, "TaskManagerDialog renders cleanly");
+                tm.Close();
+            }
+
+            dummyCtx.Favicons.Dispose();
             dummyCtx.VpnRouter.Dispose();
         }
         catch (Exception ex)
@@ -2723,6 +3403,47 @@ public sealed class MainForm : Form
         {
             main.DrawToBitmap(bmp, new Rectangle(0, 0, main.Width, main.Height));
             bmp.Save(Path.Combine(outDir, "main_dark.png"), ImageFormat.Png);
+        }
+
+        // Capture Vertical Tabs preview
+        bool prevVert = ctx.Settings.UseVerticalTabs;
+        main._verticalTabBar.Visible = true;
+        main._tabBar.Visible = false;
+        main.RenderTabs();
+        Application.DoEvents();
+        using (var bmp = new Bitmap(main.Width, main.Height))
+        {
+            main.DrawToBitmap(bmp, new Rectangle(0, 0, main.Width, main.Height));
+            bmp.Save(Path.Combine(outDir, "vertical_tabs.png"), ImageFormat.Png);
+        }
+        main._verticalTabBar.Visible = prevVert;
+        main._tabBar.Visible = !prevVert;
+
+        // Capture Split View preview
+        main._splitPane.Width = 560;
+        main._splitSplitter.Visible = true;
+        main._splitPane.Visible = true;
+        main._splitUrlBox.Text = "https://github.com/edizdar/ED-Browser";
+        Application.DoEvents();
+        using (var bmp = new Bitmap(main.Width, main.Height))
+        {
+            main.DrawToBitmap(bmp, new Rectangle(0, 0, main.Width, main.Height));
+            bmp.Save(Path.Combine(outDir, "split_view.png"), ImageFormat.Png);
+        }
+        main._splitPane.Visible = false;
+        main._splitSplitter.Visible = false;
+
+        // Capture Task Manager preview
+        using (var tmDlg = new TaskManagerDialog(ThemeService.GetPalette(ctx.Settings.Theme, false), () => main._tabs.AsReadOnly(), _ => Task.CompletedTask, () => { }))
+        {
+            tmDlg.StartPosition = FormStartPosition.Manual;
+            tmDlg.Location = new Point(-32000, -32000);
+            tmDlg.Show();
+            Application.DoEvents();
+            using var bmp = new Bitmap(tmDlg.Width, tmDlg.Height);
+            tmDlg.DrawToBitmap(bmp, new Rectangle(0, 0, tmDlg.Width, tmDlg.Height));
+            bmp.Save(Path.Combine(outDir, "task_manager.png"), ImageFormat.Png);
+            tmDlg.Close();
         }
 
         var palette = ThemeService.GetPalette(ctx.Settings.Theme, false);
@@ -2858,6 +3579,7 @@ public sealed class MainForm : Form
         if (addedSampleBm) ctx.Bookmarks.Clear();
         ctx.Settings.ShowBookmarkBar = prevBmBar;
         main.Close();
+        ctx.Favicons.Dispose();
         ctx.VpnRouter.Dispose();
     }
 }

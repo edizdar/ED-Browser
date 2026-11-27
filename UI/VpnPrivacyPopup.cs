@@ -5,9 +5,8 @@ using EDBrowser.Services;
 namespace EDBrowser.UI;
 
 /// <summary>
-/// Instant 1-Click VPN, Built-in Verified Free Server Scanner, WARP/Tor/Custom Profile switcher,
-/// and Privacy Shield popup. Fixes ComboBox dropdown dismissal completely and switches tunnels
-/// live through LocalVpnRouterService with zero browser restart.
+/// Instant 1-Click VPN, Region-Filtered Free Server Scanner, Live Bandwidth Monitor,
+/// Kill Switch, WARP/Tor/Custom Profile switcher, and Privacy Shield popup.
 /// </summary>
 public sealed class VpnPrivacyPopup : Form
 {
@@ -29,6 +28,14 @@ public sealed class VpnPrivacyPopup : Form
         ProxyMode.Custom
     };
 
+    private static readonly (string Code, string Label)[] Regions =
+    {
+        ("ALL", "Tümü (En Hızlı)"),
+        ("EU", "Avrupa (EU)"),
+        ("US", "Amerika (US)"),
+        ("AS", "Asya (AS)")
+    };
+
     private static List<FreeVpnServer> _cachedServers = new();
 
     private readonly Form? _ownerForm;
@@ -37,6 +44,7 @@ public sealed class VpnPrivacyPopup : Form
     private readonly Action _onSettingsChanged;
     private readonly Action<string> _openTabAction;
     private readonly System.Windows.Forms.Timer _outsideClickTimer;
+    private readonly System.Windows.Forms.Timer _bwTimer;
     private readonly float _sc;
     private bool _closing;
     private bool _suppressOutsideDismiss;
@@ -46,8 +54,11 @@ public sealed class VpnPrivacyPopup : Form
 
     private readonly ModernCardPanel _heroCard;
     private readonly Label _heroStatusLbl;
+    private readonly Label _bwLbl;
     private readonly ModernToggleSwitch _vpnToggle;
+    private readonly ModernToggleSwitch _killSwitchToggle;
     private readonly ComboBox _modeCombo;
+    private readonly ComboBox _regionCombo;
     private readonly ComboBox _freeServerCombo;
     private readonly ModernButton _scanBtn;
     private readonly ComboBox _profileCombo;
@@ -98,7 +109,7 @@ public sealed class VpnPrivacyPopup : Form
         _sc = DeviceDpi > 0 ? DeviceDpi / 96f : 1f;
         int S(int px) => (int)Math.Round(px * _sc);
 
-        int popupW = S(420);
+        int popupW = S(428);
         int padX = S(14);
         int innerW = popupW - padX * 2;
 
@@ -111,10 +122,10 @@ public sealed class VpnPrivacyPopup : Form
         Controls.Add(host);
 
         var s = _ctx.Settings;
-        int y = S(12);
+        int y = S(10);
 
         // ── Hero 1-Click Instant VPN Switch Card ──────────────────────────────────
-        int heroH = S(64);
+        int heroH = S(78);
         _heroCard = new ModernCardPanel
         {
             Location = new Point(padX, y),
@@ -125,16 +136,16 @@ public sealed class VpnPrivacyPopup : Form
         var titleLbl = new Label
         {
             Text = "VPN Koruması (Anlık — Yeniden Başlatma Yok)",
-            Location = new Point(S(12), S(9)),
+            Location = new Point(S(12), S(8)),
             Size = new Size(innerW - S(76), S(20)),
-            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            Font = new Font("Segoe UI", 9.25f, FontStyle.Bold),
             ForeColor = _p.TextPrimary,
             BackColor = Color.Transparent,
             UseMnemonic = false
         };
         _heroStatusLbl = new Label
         {
-            Location = new Point(S(12), S(32)),
+            Location = new Point(S(12), S(30)),
             Size = new Size(innerW - S(76), S(20)),
             Font = new Font("Segoe UI", 8.25f, FontStyle.Bold),
             ForeColor = _p.TextMuted,
@@ -142,38 +153,51 @@ public sealed class VpnPrivacyPopup : Form
             AutoEllipsis = true,
             UseMnemonic = false
         };
+        _bwLbl = new Label
+        {
+            Text = "Hız: ↓ 0.0 KB/s   ↑ 0.0 KB/s",
+            Location = new Point(S(12), S(51)),
+            Size = new Size(innerW - S(76), S(18)),
+            Font = new Font("Segoe UI", 7.75f),
+            ForeColor = _p.TextSecondary,
+            BackColor = Color.Transparent,
+            UseMnemonic = false
+        };
         _vpnToggle = new ModernToggleSwitch
         {
             Checked = s.VpnEnabled,
-            Location = new Point(innerW - S(60), S(19)),
+            Location = new Point(innerW - S(60), S(25)),
             Size = new Size(S(48), S(26)),
             OnColorStart = Color.FromArgb(16, 185, 129),
             OnColorEnd = _p.Green,
             OffTrackColor = _p.Border
         };
-        _heroCard.Controls.AddRange(new Control[] { titleLbl, _heroStatusLbl, _vpnToggle });
+        _heroCard.Controls.AddRange(new Control[] { titleLbl, _heroStatusLbl, _bwLbl, _vpnToggle });
         host.Controls.Add(_heroCard);
-        y += heroH + S(10);
+        y += heroH + S(8);
 
-        // ── Section 1: Connection Mode & Built-in Verified Free Servers ───────────
-        y = AddSectionTitle(host, "1. VPN Türü & Ücretsiz Sunucu Seçimi", y, padX, innerW, S);
+        // ── Section 1: Connection Mode, Region Filter & Free Server Scanner ───────
+        y = AddSectionTitle(host, "1. VPN Türü, Bölge Filtresi & Sunucu Seçimi", y, padX, innerW, S);
 
         int modeIdx = Array.IndexOf(ModeOrder, s.ProxyMode);
         if (modeIdx < 0) modeIdx = 0;
 
-        _modeCombo = MakeCombo(new Point(padX, y), innerW, new[]
+        int regW = S(136);
+        int gap = S(6);
+        _modeCombo = MakeCombo(new Point(padX, y), innerW - regW - gap, new[]
         {
-            "Ücretsiz Otomatik VPN Sunucusu (Anlık Bul)",
-            "Cloudflare WARP Yerel Tüneli (:40000)",
-            "Tor Ağı Yerel Tüneli (:9050 / :9150)",
-            "Özel VPN / SOCKS5 / HTTPS Profili"
+            "Ücretsiz Otomatik VPN (Çoklu Doğrulama)",
+            "Cloudflare WARP Yerel (:40000)",
+            "Tor Ağı Yerel (:9050 / :9150)",
+            "Özel VPN / SOCKS5 / HTTPS"
         }, modeIdx);
-        host.Controls.Add(_modeCombo);
-        y += S(34);
+        int regIdx = Math.Max(0, Array.FindIndex(Regions, r => r.Code.Equals(s.VpnPreferredRegion, StringComparison.OrdinalIgnoreCase)));
+        _regionCombo = MakeCombo(new Point(padX + innerW - regW, y), regW, Regions.Select(r => r.Label).ToArray(), regIdx);
+        host.Controls.AddRange(new Control[] { _modeCombo, _regionCombo });
+        y += S(32);
 
         // Built-in Verified Free Server Picker + Live Scanner Button
         int scanBtnW = S(104);
-        int gap = S(6);
         int freeComboW = innerW - scanBtnW - gap;
         _freeServerCombo = MakeCombo(new Point(padX, y), freeComboW, Array.Empty<string>(), 0);
         _scanBtn = new ModernButton
@@ -185,9 +209,15 @@ public sealed class VpnPrivacyPopup : Form
         };
         _scanBtn.ApplyTheme(_p);
         host.Controls.AddRange(new Control[] { _freeServerCombo, _scanBtn });
-        y += S(34);
+        y += S(32);
 
         PopulateFreeServerCombo();
+
+        (_killSwitchToggle, y) = AddToggleRow(host, "VPN Kill Switch (Tünel düşerse gerçek IP sızmasın)", s.VpnKillSwitch, y, padX, innerW, S, v =>
+        {
+            _ctx.Settings.VpnKillSwitch = v;
+            ApplyLiveAndNotify();
+        });
 
         _tunnelProbeLbl = new Label
         {
@@ -199,7 +229,7 @@ public sealed class VpnPrivacyPopup : Form
             UseMnemonic = false
         };
         host.Controls.Add(_tunnelProbeLbl);
-        y += S(22);
+        y += S(20);
 
         // Saved Custom Profiles row
         int addW = S(64);
@@ -209,12 +239,12 @@ public sealed class VpnPrivacyPopup : Form
         var addProfBtn = MakeSmallBtn("+ Ekle", new Point(padX + profW + gap, y), addW, S(28), (_, _) => AddVpnProfileInline());
         var delProfBtn = MakeSmallBtn("Sil", new Point(padX + profW + addW + gap * 2, y), delW, S(28), (_, _) => DeleteActiveVpnProfile());
         host.Controls.AddRange(new Control[] { _profileCombo, addProfBtn, delProfBtn });
-        y += S(33);
+        y += S(32);
 
         _proxyBox = new RoundedTextBox
         {
             Location = new Point(padX, y),
-            Size = new Size(innerW, S(32)),
+            Size = new Size(innerW, S(30)),
             PlaceholderText = "Özel adres: socks5://127.0.0.1:1080 veya http://ip:port",
             Text = s.CustomProxy
         };
@@ -244,7 +274,7 @@ public sealed class VpnPrivacyPopup : Form
             }
         };
         host.Controls.Add(_proxyBox);
-        y += S(38);
+        y += S(35);
 
         PopulateProfilesCombo();
 
@@ -270,35 +300,23 @@ public sealed class VpnPrivacyPopup : Form
         };
         testIpBtn.Click += async (_, _) => await RunIpTraceTestAsync();
         host.Controls.AddRange(new Control[] { testIpBtn, _ipResultLbl });
-        y += S(34);
-
-        // Quick 1-click Profile Sources ("VPN Profili Nereden Bulacağım?")
-        int resGap = S(6);
-        int resW = (innerW - resGap * 2) / 3;
-        var warpLinkBtn = MakeSmallBtn("WARP İndir", new Point(padX, y), resW, S(28), (_, _) => OpenUrlExternalSafe("https://one.one.one.one/"));
-        var torLinkBtn = MakeSmallBtn("Tor İndir", new Point(padX + resW + resGap, y), resW, S(28), (_, _) => OpenUrlExternalSafe("https://www.torproject.org/download/"));
-        var extVpnBtn = MakeSmallBtn("VPN Eklentisi", new Point(padX + (resW + resGap) * 2, y), innerW - (resW + resGap) * 2, S(28), (_, _) => OpenUrlExternalSafe("https://chromewebstore.google.com/search/vpn"));
-        host.Controls.AddRange(new Control[] { warpLinkBtn, torLinkBtn, extVpnBtn });
         y += S(32);
 
-        var noteLbl = new Label
-        {
-            Text = "Ücretsiz sunucular HTTPS üzerinde IP/ülke gizler; tam sıfır-kayıt gizlilik için WARP veya Tor önerilir.",
-            Location = new Point(padX, y),
-            Size = new Size(innerW, S(30)),
-            Font = new Font("Segoe UI", 7.75f),
-            ForeColor = _p.TextMuted,
-            UseMnemonic = false
-        };
-        host.Controls.Add(noteLbl);
-        y += S(34);
+        // Quick 1-click Profile Sources
+        int resGap = S(6);
+        int resW = (innerW - resGap * 2) / 3;
+        var warpLinkBtn = MakeSmallBtn("WARP İndir", new Point(padX, y), resW, S(26), (_, _) => OpenUrlExternalSafe("https://one.one.one.one/"));
+        var torLinkBtn = MakeSmallBtn("Tor İndir", new Point(padX + resW + resGap, y), resW, S(26), (_, _) => OpenUrlExternalSafe("https://www.torproject.org/download/"));
+        var extVpnBtn = MakeSmallBtn("VPN Eklentisi", new Point(padX + (resW + resGap) * 2, y), innerW - (resW + resGap) * 2, S(26), (_, _) => OpenUrlExternalSafe("https://chromewebstore.google.com/search/vpn"));
+        host.Controls.AddRange(new Control[] { warpLinkBtn, torLinkBtn, extVpnBtn });
+        y += S(32);
 
         y = AddDivider(host, y, padX, innerW, S);
 
         // ── Section 2: Instant Privacy Shields ────────────────────────────────────
         y = AddSectionTitle(host, "2. Anlık Gizlilik Korumaları", y, padX, innerW, S);
 
-        (_, y) = AddToggleRow(host, "Reklam & İzleyici Engelleyici (150+ ağ)", s.AdBlockEnabled, y, padX, innerW, S, v =>
+        (_, y) = AddToggleRow(host, "Reklam & İzleyici Engelleyici + Kozmetik Gizleme", s.AdBlockEnabled, y, padX, innerW, S, v =>
         {
             _ctx.Settings.AdBlockEnabled = v;
             _ctx.Storage.SaveSettings(_ctx.Settings);
@@ -351,15 +369,14 @@ public sealed class VpnPrivacyPopup : Form
             _onSettingsChanged();
         };
         host.Controls.AddRange(new Control[] { dohLbl, _dohCombo });
-        y += S(36);
+        y += S(34);
 
-        // Wire live event handlers after all controls exist
         WireInteractiveEvents();
         UpdateHeroCardUi();
 
         int desiredH = y + S(10);
         var wa = Screen.FromPoint(anchorBottomLeftScreen).WorkingArea;
-        int maxH = Math.Max(340, wa.Height - 28);
+        int maxH = Math.Max(360, wa.Height - 28);
         bool needsScroll = desiredH > maxH;
         host.AutoScroll = needsScroll;
         int finalH = Math.Min(desiredH, maxH);
@@ -378,6 +395,9 @@ public sealed class VpnPrivacyPopup : Form
             using var pen = new Pen(_p.Border, 1.2f);
             e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
         };
+
+        _bwTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+        _bwTimer.Tick += (_, _) => UpdateBandwidthLabel();
 
         _outsideClickTimer = new System.Windows.Forms.Timer { Interval = 80 };
         if (enableOutsideDismiss)
@@ -398,9 +418,25 @@ public sealed class VpnPrivacyPopup : Form
             Shown += async (_, _) =>
             {
                 _outsideClickTimer.Start();
+                _bwTimer.Start();
                 await ProbeLocalTunnelsAsync();
             };
         }
+    }
+
+    private void UpdateBandwidthLabel()
+    {
+        if (IsDisposed) return;
+        var bw = _ctx.VpnRouter.SampleBandwidth();
+        string totalStr = FormatBytes(bw.TotalDown + bw.TotalUp);
+        _bwLbl.Text = $"Hız: ↓ {bw.DownKBps:0.0} KB/s   ↑ {bw.UpKBps:0.0} KB/s   (Toplam: {totalStr})";
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:0.0} KB";
+        return $"{bytes / (1024.0 * 1024.0):0.0} MB";
     }
 
     private bool ShouldIgnoreOutsideDismiss() =>
@@ -469,6 +505,15 @@ public sealed class VpnPrivacyPopup : Form
             ApplyLiveAndNotify();
         };
 
+        _regionCombo.SelectedIndexChanged += async (_, _) =>
+        {
+            if (_syncingUi) return;
+            int idx = Math.Clamp(_regionCombo.SelectedIndex, 0, Regions.Length - 1);
+            _ctx.Settings.VpnPreferredRegion = Regions[idx].Code;
+            _ctx.Storage.SaveSettings(_ctx.Settings);
+            await ScanFreeServersAsync(autoConnectFirst: _ctx.Settings.VpnEnabled);
+        };
+
         _freeServerCombo.SelectedIndexChanged += (_, _) =>
         {
             if (_syncingUi) return;
@@ -524,11 +569,11 @@ public sealed class VpnPrivacyPopup : Form
         _scanBtn.Enabled = false;
         _scanBtn.Text = "Taranıyor…";
         _heroStatusLbl.ForeColor = _p.Accent;
-        _heroStatusLbl.Text = "Canlı ücretsiz VPN sunucuları çoklu sitede doğrulanıyor…";
+        _heroStatusLbl.Text = $"({_ctx.Settings.VpnPreferredRegion}) canlı sunucular çoklu sitede doğrulanıyor…";
 
         try
         {
-            var found = await ProxyService.DiscoverVerifiedFreeRelaysAsync(8);
+            var found = await ProxyService.DiscoverVerifiedFreeRelaysAsync(8, _ctx.Settings.VpnPreferredRegion);
             if (IsDisposed) return;
 
             if (found.Count > 0)
@@ -544,7 +589,7 @@ public sealed class VpnPrivacyPopup : Form
             else
             {
                 _heroStatusLbl.ForeColor = _p.Red;
-                _heroStatusLbl.Text = "Tüm sitelere açılan ücretsiz sunucu bulunamadı (WARP / Tor önerilir)";
+                _heroStatusLbl.Text = "Tüm sitelere açılan sunucu bulunamadı (WARP / Tor önerilir)";
             }
         }
         finally
@@ -572,6 +617,7 @@ public sealed class VpnPrivacyPopup : Form
         {
             var s = _ctx.Settings;
             _vpnToggle.Checked = s.VpnEnabled;
+            _killSwitchToggle.Checked = s.VpnKillSwitch;
             int modeIdx = Array.IndexOf(ModeOrder, s.ProxyMode);
             if (modeIdx >= 0 && modeIdx < _modeCombo.Items.Count)
                 _modeCombo.SelectedIndex = modeIdx;
@@ -589,13 +635,22 @@ public sealed class VpnPrivacyPopup : Form
     private void UpdateHeroCardUi()
     {
         var s = _ctx.Settings;
-        _heroCard.BorderColor = s.VpnEnabled ? _p.Green : _p.Border;
+        _heroCard.BorderColor = _ctx.VpnRouter.IsKillSwitchBlocking
+            ? _p.Red
+            : (s.VpnEnabled ? _p.Green : _p.Border);
         _heroCard.Invalidate();
 
         if (!s.VpnEnabled)
         {
             _heroStatusLbl.ForeColor = _p.TextMuted;
             _heroStatusLbl.Text = "Kapalı • Doğrudan bağlantı (açmak için sağdaki düğmeye dokun)";
+            return;
+        }
+
+        if (_ctx.VpnRouter.IsKillSwitchBlocking)
+        {
+            _heroStatusLbl.ForeColor = _p.Red;
+            _heroStatusLbl.Text = "KİLİT AÇIK (Kill Switch) • Trafik gerçek IP sızmasın diye kesildi";
             return;
         }
 
@@ -681,6 +736,7 @@ public sealed class VpnPrivacyPopup : Form
         _heroCard.BorderColor = _p.Green;
         _heroStatusLbl.ForeColor = _p.Green;
         _heroStatusLbl.Text = "BAĞLI • DE — Almanya (84 ms) • SOCKS5";
+        _bwLbl.Text = "Hız: ↓ 412.5 KB/s   ↑ 38.2 KB/s   (Toplam: 14.8 MB)";
         _tunnelProbeLbl.Text = "WARP: Açık (:40000)   •   Tor: Kapalı";
         _tunnelProbeLbl.ForeColor = _p.Green;
         _ipResultLbl.Text = "198.51.100.10 (DE) • Ücretsiz VPN (DE)";
@@ -722,6 +778,7 @@ public sealed class VpnPrivacyPopup : Form
         if (_closing || IsDisposed) return;
         _closing = true;
         _outsideClickTimer.Stop();
+        _bwTimer.Stop();
         Close();
     }
 
@@ -805,31 +862,31 @@ public sealed class VpnPrivacyPopup : Form
         {
             Text = text,
             Location = new Point(padX, y),
-            Size = new Size(width, S(20)),
+            Size = new Size(width, S(19)),
             Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
             ForeColor = _p.Accent,
             UseMnemonic = false
         });
-        return y + S(23);
+        return y + S(21);
     }
 
     private int AddDivider(Panel host, int y, int padX, int width, Func<int, int> S)
     {
-        host.Controls.Add(new Panel { Location = new Point(padX, y + S(2)), Size = new Size(width, 1), BackColor = _p.Border });
-        return y + S(9);
+        host.Controls.Add(new Panel { Location = new Point(padX, y + S(1)), Size = new Size(width, 1), BackColor = _p.Border });
+        return y + S(7);
     }
 
     private (ModernToggleSwitch Toggle, int NextY) AddToggleRow(
         Panel host, string label, bool checkedVal, int y, int padX, int width, Func<int, int> S, Action<bool> onChanged)
     {
-        int togW = S(44);
-        int togH = S(22);
+        int togW = S(42);
+        int togH = S(21);
         var lbl = new Label
         {
             Text = label,
             Location = new Point(padX, y),
-            Size = new Size(width - togW - S(8), S(25)),
-            Font = new Font("Segoe UI", 8.5f),
+            Size = new Size(width - togW - S(8), S(23)),
+            Font = new Font("Segoe UI", 8.25f),
             ForeColor = _p.TextPrimary,
             TextAlign = ContentAlignment.MiddleLeft,
             UseMnemonic = false
@@ -845,7 +902,7 @@ public sealed class VpnPrivacyPopup : Form
         };
         tog.CheckedChanged += (_, _) => onChanged(tog.Checked);
         host.Controls.AddRange(new Control[] { lbl, tog });
-        return (tog, y + S(27));
+        return (tog, y + S(25));
     }
 
     private ComboBox MakeCombo(Point loc, int width, string[] items, int selectedIndex)
@@ -856,10 +913,10 @@ public sealed class VpnPrivacyPopup : Form
             Width = width,
             DropDownStyle = ComboBoxStyle.DropDownList,
             DrawMode = DrawMode.OwnerDrawFixed,
-            ItemHeight = (int)Math.Round(24 * _sc),
+            ItemHeight = (int)Math.Round(23 * _sc),
             BackColor = _p.BaseBg,
             ForeColor = _p.TextPrimary,
-            Font = new Font("Segoe UI", 8.5f),
+            Font = new Font("Segoe UI", 8.25f),
             FlatStyle = FlatStyle.Flat
         };
         cb.DropDown += (_, _) => _comboDropDownOpen = true;
@@ -908,7 +965,10 @@ public sealed class VpnPrivacyPopup : Form
     protected override void Dispose(bool disposing)
     {
         if (disposing)
+        {
             _outsideClickTimer.Dispose();
+            _bwTimer.Dispose();
+        }
         base.Dispose(disposing);
     }
 }

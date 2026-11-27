@@ -10,6 +10,13 @@ public sealed record MemorySnapshot(
     long TotalPrivateBytes,
     int ProcessCount);
 
+public sealed record ProcessMemoryInfo(
+    int Pid,
+    string Name,
+    long WorkingSetBytes,
+    long PrivateBytes,
+    double CpuSeconds);
+
 /// <summary>
 /// Fast, zero-WMI process-tree memory measurement and working-set trimming using Toolhelp32 + Psapi.
 /// </summary>
@@ -81,6 +88,33 @@ public static class MemoryManagerService
         }
 
         return new MemorySnapshot(hostWs, hostPriv, totalWs, totalPriv, aliveCount);
+    }
+
+    public static List<ProcessMemoryInfo> CaptureDetailedProcessList()
+    {
+        int rootPid = Environment.ProcessId;
+        var treePids = CollectDescendantPids(rootPid);
+        treePids.Add(rootPid);
+
+        var result = new List<ProcessMemoryInfo>();
+        foreach (int pid in treePids)
+        {
+            try
+            {
+                using var proc = Process.GetProcessById(pid);
+                proc.Refresh();
+                double cpuSec = 0;
+                try { cpuSec = proc.TotalProcessorTime.TotalSeconds; } catch { }
+                result.Add(new ProcessMemoryInfo(
+                    pid,
+                    pid == rootPid ? $"{proc.ProcessName} (Ana Tarayıcı)" : proc.ProcessName,
+                    proc.WorkingSet64,
+                    proc.PrivateMemorySize64,
+                    cpuSec));
+            }
+            catch { }
+        }
+        return result.OrderByDescending(x => x.WorkingSetBytes).ToList();
     }
 
     public static void TrimHostWorkingSet()

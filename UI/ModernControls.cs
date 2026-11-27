@@ -64,7 +64,13 @@ public enum VectorIcon
     ChevronRight,
     Minus,
     Puzzle,
-    Sidebar
+    Sidebar,
+    Book,
+    SplitView,
+    Users,
+    Activity,
+    MediaPlay,
+    VerticalTabs
 }
 
 public static class GraphicsExt
@@ -727,6 +733,56 @@ public static class IconPainter
                 g.DrawLine(pen, cx - 1.4f * u, cy - 4.4f * u, cx - 1.4f * u, cy + 4.4f * u);
                 g.FillRectangle(brush, cx - 4.5f * u, cy - 3.6f * u, 2.6f * u, 7.2f * u);
                 break;
+
+            case VectorIcon.Book:
+                g.DrawLines(pen, new[] { new PointF(cx, cy - 3.4f * u), new PointF(cx - 5f * u, cy - 4.4f * u), new PointF(cx - 5f * u, cy + 3.8f * u), new PointF(cx, cy + 4.8f * u) });
+                g.DrawLines(pen, new[] { new PointF(cx, cy - 3.4f * u), new PointF(cx + 5f * u, cy - 4.4f * u), new PointF(cx + 5f * u, cy + 3.8f * u), new PointF(cx, cy + 4.8f * u) });
+                g.DrawLine(pen, cx, cy - 3.4f * u, cx, cy + 4.8f * u);
+                break;
+
+            case VectorIcon.SplitView:
+                using (var gp = GraphicsExt.CreateRoundedRect(new RectangleF(cx - 5.2f * u, cy - 4.4f * u, 10.4f * u, 8.8f * u), 1.3f * u))
+                    g.DrawPath(pen, gp);
+                g.DrawLine(pen, cx, cy - 4.4f * u, cx, cy + 4.4f * u);
+                break;
+
+            case VectorIcon.Users:
+                g.DrawEllipse(pen, cx - 3.6f * u, cy - 4.6f * u, 4.4f * u, 4.4f * u);
+                g.DrawArc(pen, cx - 5.2f * u, cy + 0.6f * u, 7.6f * u, 5.2f * u, 180, 180);
+                g.DrawEllipse(pen, cx + 1.4f * u, cy - 3.8f * u, 3.2f * u, 3.2f * u);
+                g.DrawArc(pen, cx + 0.6f * u, cy + 1f * u, 4.8f * u, 4.4f * u, 210, 140);
+                break;
+
+            case VectorIcon.Activity:
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(cx - 5.4f * u, cy + 0.4f * u),
+                    new PointF(cx - 2.6f * u, cy + 0.4f * u),
+                    new PointF(cx - 1.0f * u, cy - 4.4f * u),
+                    new PointF(cx + 1.2f * u, cy + 4.6f * u),
+                    new PointF(cx + 2.8f * u, cy - 0.6f * u),
+                    new PointF(cx + 5.4f * u, cy - 0.6f * u)
+                });
+                break;
+
+            case VectorIcon.MediaPlay:
+                g.DrawEllipse(pen, cx - 5.2f * u, cy - 5.2f * u, 10.4f * u, 10.4f * u);
+                g.FillPolygon(brush, new[]
+                {
+                    new PointF(cx - 1.5f * u, cy - 2.6f * u),
+                    new PointF(cx + 3.0f * u, cy),
+                    new PointF(cx - 1.5f * u, cy + 2.6f * u)
+                });
+                break;
+
+            case VectorIcon.VerticalTabs:
+                using (var gp = GraphicsExt.CreateRoundedRect(new RectangleF(cx - 5.2f * u, cy - 4.4f * u, 10.4f * u, 8.8f * u), 1.3f * u))
+                    g.DrawPath(pen, gp);
+                g.DrawLine(pen, cx - 1.2f * u, cy - 4.4f * u, cx - 1.2f * u, cy + 4.4f * u);
+                g.DrawLine(pen, cx - 4f * u, cy - 2f * u, cx - 2.2f * u, cy - 2f * u);
+                g.DrawLine(pen, cx - 4f * u, cy, cx - 2.2f * u, cy);
+                g.DrawLine(pen, cx - 4f * u, cy + 2f * u, cx - 2.2f * u, cy + 2f * u);
+                break;
         }
     }
 }
@@ -1194,6 +1250,9 @@ public sealed class ModernTabItem
     public bool Pinned { get; init; }
     public bool PlayingAudio { get; init; }
     public bool Muted { get; init; }
+    public string GroupName { get; init; } = string.Empty;
+    public Color GroupColor { get; init; } = Color.Empty;
+    public Image? Favicon { get; init; }
 }
 
 public sealed class ModernTabBar : Control
@@ -1393,20 +1452,29 @@ public sealed class ModernTabBar : Control
             using (var br = new SolidBrush(tabBg))
                 g.FillPath(br, path);
 
+            if (!string.IsNullOrEmpty(item.GroupName) && !item.GroupColor.IsEmpty)
+            {
+                var grpBar = new RectangleF(r.X + rad, r.Bottom - 2.5f * sc, Math.Max(4, r.Width - rad * 2), 2.5f * sc);
+                using var grpBr = new SolidBrush(item.GroupColor);
+                g.FillRectangle(grpBr, grpBar);
+            }
+
             if (item.Active)
             {
                 using var borderPen = new Pen(Palette.Border, 1f);
                 g.DrawPath(borderPen, path);
 
                 var topBar = new RectangleF(r.X + rad, r.Y, Math.Max(4, r.Width - rad * 2), 2.5f * sc);
-                using var accBr = new LinearGradientBrush(topBar, Palette.Accent, Palette.AccentPurple, 0f);
+                using var accBr = item.GroupColor.IsEmpty
+                    ? (Brush)new LinearGradientBrush(topBar, Palette.Accent, Palette.AccentPurple, 0f)
+                    : new SolidBrush(item.GroupColor);
                 g.FillRectangle(accBr, topBar);
 
                 using var cover = new Pen(Palette.BaseBg, 2f);
                 g.DrawLine(cover, r.X + 1, Height - 1, r.Right - 1, Height - 1);
             }
 
-            float iconSz = 13f * sc;
+            float iconSz = 14f * sc;
             VectorIcon glyph = item.Loading ? VectorIcon.Reload
                 : (item.Sleeping || item.DeepUnloaded) ? VectorIcon.Sleep
                 : item.Pinned ? VectorIcon.Pin
@@ -1418,7 +1486,11 @@ public sealed class ModernTabBar : Control
             if (item.Pinned)
             {
                 float px = (item.PlayingAudio || item.Muted) ? r.X + 9f * sc : r.X + (r.Width - iconSz) / 2f;
-                IconPainter.Draw(g, glyph, new RectangleF(px, r.Y + (r.Height - iconSz) / 2f, iconSz, iconSz), glyphColor, 1.5f);
+                var pinRect = new RectangleF(px, r.Y + (r.Height - iconSz) / 2f, iconSz, iconSz);
+                if (!item.Loading && item.Favicon is not null)
+                    g.DrawImage(item.Favicon, pinRect);
+                else
+                    IconPainter.Draw(g, glyph, pinRect, glyphColor, 1.5f);
                 if (item.PlayingAudio || item.Muted)
                 {
                     float aSz = 11f * sc;
@@ -1430,7 +1502,10 @@ public sealed class ModernTabBar : Control
             }
 
             var iconRect = new RectangleF(r.X + 10f * sc, r.Y + (r.Height - iconSz) / 2f, iconSz, iconSz);
-            IconPainter.Draw(g, glyph, iconRect, glyphColor, 1.45f);
+            if (!item.Loading && !item.Sleeping && !item.DeepUnloaded && item.Favicon is not null)
+                g.DrawImage(item.Favicon, iconRect);
+            else
+                IconPainter.Draw(g, glyph, iconRect, glyphColor, 1.45f);
 
             float rightStopX = _closeRects[i].X;
             if (item.PlayingAudio || item.Muted)
