@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>ED.Browser.Setup.4.1.0</AssemblyName>
+    <RootNamespace>EDBrowser.Setup</RootNamespace>
+    <Product>ED Browser Kurulum</Product>
+    <AssemblyTitle>ED Browser v4.1.0 Kurulum Sihirbazı</AssemblyTitle>
+    <Company>Erol Dizdar</Company>
+    <Version>4.1.0</Version>
+    <FileVersion>4.1.0.0</FileVersion>
+    <ApplicationIcon>..\Assets\edbrowser.ico</ApplicationIcon>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <DebugType>none</DebugType>
+    <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
+    <NoWarn>WFO1000</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\Assets\edbrowser.ico" LogicalName="edbrowser.ico" />
+    <EmbeddedResource Include="..\publish\ED.Browser.4.1.0.Portable.exe" LogicalName="EDBrowser.Payload.exe" />
+  </ItemGroup>
+
+</Project>

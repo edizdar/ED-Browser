@@ -1,298 +1,121 @@
-# 📖 ED Browser — Kullanım Kılavuzu
+# 🌐 ED Browser v4.1.0
 
-> Reklam yok, izleme yok, gereksiz özellik yok. Chromium motoruyla tam uyumlu, tamamen senin kontrolünde bir tarayıcı.
+> Reklam yok, izleme yok, gereksiz RAM tüketimi yok. **Chromium (Edge WebView2)** motoruyla tam web uyumlu, yerel **WinForms GDI+** arayüzü sayesinde ultra hafif ve tamamen açık kaynak Windows masaüstü tarayıcısı.
 
----
-
-## İçindekiler
-
-- [ED Browser Nedir?](#ed-browser-nedir)
-- [İlk Başlangıç](#ilk-başlangıç)
-- [Sekmeler](#sekmeler)
-- [Adres Çubuğu](#adres-çubuğu)
-- [Yer İmleri](#yer-i̇mleri)
-- [İndirme Yöneticisi](#i̇ndirme-yöneticisi)
-- [Geçmiş](#geçmiş)
-- [Reklam Engelleyici](#reklam-engelleyici)
-- [Gizli Mod](#gizli-mod)
-- [Şifre Yöneticisi](#şifre-yöneticisi)
-- [Ekran Görüntüsü](#ekran-görüntüsü)
-- [Yakınlaştırma](#yakınlaştırma)
-- [Sayfada Ara](#sayfada-ara)
-- [Tam Ekran](#tam-ekran)
-- [Tema ve Görünüm](#tema-ve-görünüm)
-- [Performans Ayarları](#performans-ayarları)
-- [İçe Aktarım](#i̇çe-aktarım)
-- [Varsayılan Tarayıcı](#varsayılan-tarayıcı)
-- [Klavye Kısayolları](#klavye-kısayolları)
+[![Sürüm](https://img.shields.io/badge/S%C3%BCr%C3%BCm-v4.1.0-38bdf8?style=flat-square)](https://github.com/edizdar/ED-Browser/releases/latest)
+[![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11%20(x64)-818cf8?style=flat-square)](https://github.com/edizdar/ED-Browser/releases)
+[![Lisans](https://img.shields.io/badge/Lisans-MIT-34d399?style=flat-square)](LICENSE)
 
 ---
 
-## ED Browser Nedir?
+## 📥 İndirme Seçenekleri
 
-ED Browser, **Electron.js** teknolojisiyle geliştirilen, Windows için tasarlanmış ücretsiz bir masaüstü web tarayıcısıdır. Google Chrome ile aynı **Chromium motorunu** kullandığı için tüm web siteleri sorunsuz açılır.
+[Releases](https://github.com/edizdar/ED-Browser/releases/latest) sayfasından ihtiyacına göre iki sürümden birini indirebilirsin:
 
-| | |
-|---|---|
-| ✅ **Ne yapabilirsin?** | Web'de gezinmek, video izlemek, dosya indirmek, yer imi kaydetmek, şifreleri yönetmek, ekran görüntüsü almak |
-| 🛡️ **Ne farklı?** | Reklam engelleyici yerleşik, şifreler yerel şifreli saklanır, gizli mod kapanınca tüm izleri siler, hiçbir veri buluta gitmez |
+| Sürüm | Dosya | Boyut | Açıklama |
+| :--- | :--- | :--- | :--- |
+| 🛠️ **Kurulum Sürümü (Önerilen)** | `ED.Browser.Setup.4.1.0.exe` | **~1,84 MB** | Kurulum sihirbazı, Masaüstü & Başlat Menüsü kısayolları, Windows Programlar listesi ve `Uninstall.exe` içerir. Profil verileri `%LOCALAPPDATA%\EDBrowser4` altında saklanır. |
+| 🎒 **Taşınabilir (Portable) Sürüm** | `ED.Browser.4.1.0.Portable.exe` | **~1,61 MB** | Kurulum gerektirmez, USB veya herhangi bir klasörden çalışır. Tüm veriler yanındaki `EDBrowserData` klasöründe tutulur. |
 
-> 💡 Chrome veya Firefox kullanıyorsan yer imlerini ve şifrelerini ED Browser'a kolayca aktarabilirsin.
-
----
-
-## İlk Başlangıç
-
-**1. Kurulum**
-`ED Browser Setup.exe` dosyasını çalıştır. Kurulum sihirbazını takip et. Masaüstüne ve Başlat menüsüne kısayol otomatik eklenir.
-
-**2. Ana sayfa ayarla**
-Sağ üstteki ⚙️ Ayarlar butonuna tıkla. "Ana Sayfa" alanına istediğin adresi yaz ve **Kaydet**'e bas.
-
-**3. Diğer tarayıcıdan geçiş** *(isteğe bağlı)*
-Ayarlar → **Diğer Tarayıcıdan İçe Aktar** ile Chrome/Edge/Firefox yer imlerini ve şifrelerini aktarabilirsin.
-
-**4. Varsayılan tarayıcı yap** *(isteğe bağlı)*
-Ayarlar → **Windows Varsayılan Tarayıcı Yap** butonuna tıkla. Açılan Windows ayarlarından ED Browser'ı seç.
+> **Önkoşul:** Windows 10/11'de yerleşik **Microsoft Edge WebView2** ve **.NET 10 Desktop Runtime (x64)** kullanır.
 
 ---
 
-## Sekmeler
+## 📸 Ekran Görüntüleri
 
-Birden fazla web sitesini aynı anda açık tutabilirsin. Her sekme bağımsız çalışır.
+### Ana Ekran & Özelleştirilebilir Yeni Sekme
+Kullanıcı tarafından yönetilen site kısayolları (`+ Site Ekle`), hap (pill) adres çubuğu, canlı `⚡ RAM` göstergesi ve vektörel karanlık arayüz:
 
-| İşlem | Yöntem |
-|---|---|
-| Yeni sekme aç | `＋` butonuna tıkla veya `Ctrl+T` |
-| Sekme kapat | `×` butonuna tıkla veya `Ctrl+W` |
-| Sekmeler arası geçiş | Sekmeye tıkla veya `Ctrl+1`...`9` |
-| Yeni sekmede aç | Linke sağ tıkla → **Bağlantıyı Yeni Sekmede Aç** |
+![ED Browser Ana Ekran](docs/screenshots/main_dark.png)
 
----
+### Geçmiş Paneli (Arama & Tekil Silme)
+Anlık arama kutusu, satır üzeri `×` butonu ile tekil kayıt silme ve sağ tık menüsü (`Bu Sitenin Tüm Geçmişini Sil` dahil):
 
-## Adres Çubuğu
+![ED Browser Geçmiş Paneli](docs/screenshots/history_panel.png)
 
-Adres çubuğuna hem web adresi hem de arama terimi yazabilirsin. Adres değilse otomatik olarak seçtiğin arama motorunda arama yapar.
+### Modern 2 Sütunlu Ayarlar
+| Genel | Gizlilik & Ağ |
+| :---: | :---: |
+| ![Ayarlar Genel](docs/screenshots/settings_general.png) | ![Ayarlar Gizlilik](docs/screenshots/settings_privacy.png) |
+| **Performans & RAM Optimizasyonu** | **Sistem, Güncelleme & Hakkında** |
+| ![Ayarlar Performans](docs/screenshots/settings_performance.png) | ![Ayarlar Sistem](docs/screenshots/settings_system.png) |
 
-**Sağ tık menüsü:**
-- 📋 **Yapıştır** — panodakini yazar
-- 🚀 **Yapıştır ve Git** — yapıştırıp otomatik açar
-- Kes, Kopyala, Tümünü Seç, Temizle
-
-**Kilit ikonu:**
-| İkon | Anlam |
-|---|---|
-| 🔒 | HTTPS — güvenli bağlantı |
-| ⚠️ | HTTP — şifresiz bağlantı |
-| 🌐 | Yerel sayfa veya yeni sekme |
+### Yer İmi Ekleme & Kurulum Sihirbazı
+| Yer İmi Ekle / Klasör Oluştur | Windows Kurulum Sihirbazı |
+| :---: | :---: |
+| ![Yer İmi Ekleme](docs/screenshots/bookmark_dialog.png) | ![Kurulum Sihirbazı](docs/screenshots/setup-wizard.png) |
 
 ---
 
-## Yer İmleri
+## ⚡ v3.1.8 (Electron) vs v4.1.0 (WinForms + WebView2) Karşılaştırması
 
-**Yer imi ekle:**
-Adres çubuğundaki ☆ yıldız butonuna tıkla veya `Ctrl+D`. Başlık ve klasör seçip kaydet.
-
-**Klasörle düzenle:**
-Yer imi eklerken klasör seçebilir veya 📁 Yeni butonuyla yeni klasör oluşturabilirsin.
-
-**Düzenle ve taşı:**
-Yer imi çubuğundaki veya paneldeki öğelere sağ tıkla → **Düzenle** veya **Sil**. Panel içinde sürükle-bırak ile taşıyabilirsin.
-
-> 💡 Yer imi çubuğunu `Ctrl+Shift+B` ile göster/gizle yapabilirsin.
-
----
-
-## İndirme Yöneticisi
-
-Dosya indirince masaüstünde bildirim çıkar. Tüm indirmeleri takip etmek için ⬇ butonuna veya `Ctrl+Shift+J`'ye bas.
-
-| Buton | İşlev |
-|---|---|
-| 📂 Aç | İndirilen dosyayı doğrudan aç |
-| 📁 Klasörde Göster | Dosyanın bulunduğu klasörü aç |
-
-> 💡 Sayfadaki bir resme sağ tıkla → **Resmi İndir** ile doğrudan görsel indirebilirsin.
+| Ölçüt | ED Browser v3.1.8 (Electron) | ED Browser v4.1.0 (WinForms + WebView2) |
+| :--- | :--- | :--- |
+| **Taşınabilir `.exe` Boyutu** | 72,67 MB | **1,61 MB** (**%97,8 daha küçük**) |
+| **Kurulum `.exe` Boyutu** | 73,00 MB | **1,84 MB** (**%97,5 daha küçük**) |
+| **Çalıştırılınca Açılan Disk Alanı** | 251,72 MB | **~1,6–1,8 MB** (sistem WebView2 paylaşılır) |
+| **Arayüz Motoru** | Ekstra Chromium Renderer süreci | **Saf yerel WinForms GDI+** (0 ekstra renderer) |
+| **Pasif Sekme Bellek Yönetimi** | Yalnızca JS zamanlayıcı kısma | **`MemoryUsageTargetLevel.Low` + `TrySuspendAsync()` + Derin Boşaltma (`0 MB`)** |
+| **Şifre Kasası Güvenliği** | Sabit anahtarlı AES-256-CBC | **AES-256-GCM + Windows DPAPI** (kullanıcıya özel anahtar) |
+| **Reklam & İzleyici Engelleyici** | 45 ağ | **150+ reklam, takipçi ve telemetri ağı** |
+| **Güncelleme Bildirimi** | Yok | **Açılışta + Ayarlardan tek tıkla GitHub kontrolü** |
 
 ---
 
-## Geçmiş
+## ✨ Öne Çıkan Özellikler
 
-🕐 butonuna tıkla. Son 200 ziyaret listelenir. Bir öğeye tıklayarak o sayfaya gidebilirsin.
-
-**Geçmişi temizle:** Geçmiş panelindeki **Temizle** butonu ile tüm geçmişi sil.
-
-> Gizli modda gezinen sayfalar geçmişe kaydedilmez.
-
----
-
-## Reklam Engelleyici
-
-Reklam engelleyici **varsayılan olarak açıktır**. 30'dan fazla reklam ağını otomatik olarak engeller.
-
-**Açma/Kapama:** Ayarlar → Gizlilik & Güvenlik → Reklam Engelleyici toggle'ı
-
-**Engellenenler:** Google Ads, Facebook Ads, Taboola, Outbrain, Criteo ve daha fazlası.
-
-> ⚠️ Bazı siteler reklam engelleyici tespit edip içerik göstermeyebilir. Bu durumda geçici olarak kapatabilirsin.
+- **Agresif RAM Optimizasyonu:**
+  - Arka planda kalan sekmeler önce düşük bellek moduna geçer, belirlenen süre sonunda `TrySuspendAsync()` ile uyutulur (`💤`), uzun süre kullanılmazsa derin boşaltma (`❄️`) ile tamamen sıfırlanır.
+  - Araç çubuğundaki **`⚡ XX MB`** butonuna tıklayarak tüm pasif sekmeleri anında uyutup çalışma kümesini (working set) sıkıştırabilirsin.
+- **Chrome Gibi Geliştirici Araçları (`F12` / `Ctrl+Shift+I` / Sağ Tık → İncele):**
+  - Tarayıcının sağ tarafına sabitlenmiş (docked), sürüklenebilir ayırıcılı DevTools paneli; kısayola tekrar basınca kapanır.
+- **Yerleşik Reklam & İzleyici Engelleyici:**
+  - 150'den fazla reklam ve analitik ağı sayfa yüklenmeden engellenir; adres çubuğundaki kalkan simgesinden anlık açılıp kapatılabilir.
+- **AES-256-GCM + Windows DPAPI Yerel Şifre Yöneticisi:**
+  - Hiçbir veri buluta gitmez. Anahtar Windows DPAPI ile o kullanıcı hesabına bağlı saklanır. Formlarda otomatik **Doldur / Kaydet** çubuğu ve Chrome/Edge CSV içe aktarımı sunar.
+- **Kullanıcı Kontrollü Yeni Sekme & Yer İmleri:**
+  - Yeni sekmede sabit site kalabalığı yoktur; **`+ Site Ekle`** ile kendi kısayollarını ekleyebilirsin.
+  - Yer imi çubuğunda fareyle **basılı tutup sürükleyerek** sıralama yapabilir veya bir klasörün içine bırakabilirsin. Klasör menüleri fare çıkınca otomatik kapanır.
+- **Proxy & Cloudflare DNS-over-HTTPS:**
+  - Doğrudan, Sistem Proxy, Özel HTTP/SOCKS5 veya Tor (`127.0.0.1:9050`) + Cloudflare DoH (`1.1.1.1`) ve dahili IP test aracı.
+- **Ekran Görüntüsü (`Ctrl+Shift+S`), Gizli Mod (`Ctrl+Shift+P`), İndirme Yöneticisi (`Ctrl+Shift+J`), Sayfada Ara (`Ctrl+F`)** ve **Windows Varsayılan Tarayıcı** kaydı.
 
 ---
 
-## Gizli Mod
-
-Gizli modda gezinirken hiçbir şey kaydedilmez. Pencere kapandığında tüm çerezler, geçmiş ve oturum bilgileri otomatik silinir.
-
-**Nasıl açılır:** 🕵️ butonu veya `Ctrl+Shift+P`
-
-**Ne silinir:** Çerezler, oturum bilgileri, geçici dosyalar ve sayfa önbelleği.
-
-> 💡 Aynı sitede iki farklı hesapla oturum açmak için bir sekmeyi normal, diğerini gizli modda aç.
-
----
-
-## Şifre Yöneticisi
-
-Şifreler **AES-256 şifreleme** ile yerel olarak saklanır. Hiçbir şifre internete veya buluta gitmez.
-
-**Şifre kaydet:**
-🔐 butonu → **＋ Şifre Ekle** → Site adı, kullanıcı adı ve şifreyi gir.
-
-**Otomatik doldurma:**
-Kayıtlı bir siteye gittiğinde altta **"Doldur"** butonu çıkar. Tıklayınca kullanıcı adı ve şifre otomatik doldurulur.
-
-**Chrome/Edge'den aktar:**
-1. Chrome/Edge: Ayarlar → Şifreler → Dışa Aktar → CSV kaydet
-2. ED Browser: 📥 İçe Aktar → Şifre CSV Dosyası Seç
-
----
-
-## Ekran Görüntüsü
-
-📷 butonu veya `Ctrl+Shift+S` ile ekran görüntüsü al.
-
-| Seçenek | Açıklama |
-|---|---|
-| 📄 Tüm sayfa | Görünür sayfanın tamamı — "Farklı Kaydet" dialogu açılır |
-| ✂️ Alan seç | Ekran kararır, fareyle alan çiz, sadece seçilen alan kaydedilir |
-
----
-
-## Yakınlaştırma
+## ⌨️ Klavye Kısayolları
 
 | Kısayol | İşlev |
-|---|---|
-| `Ctrl++` | Yakınlaştır |
-| `Ctrl+-` | Uzaklaştır |
-| `Ctrl+0` | %100 sıfırla |
-
-Toolbar'daki `－` **100%** `＋` butonlarıyla da kontrol edilebilir.
-
----
-
-## Sayfada Ara
-
-`Ctrl+F` ile sayfanın altında arama çubuğu açılır.
-
-- **▲** Önceki eşleşme
-- **▼** Sonraki eşleşme
-- **ESC** veya **✕** — Kapat
-
----
-
-## Tam Ekran
-
-| İşlem | Kısayol |
-|---|---|
-| Tam ekrana gir | `F11` veya ⛶ butonu |
-| Tam ekrandan çık | `F11` veya `ESC` |
-
----
-
-## Tema ve Görünüm
-
-Ayarlar → Tema:
-
-| Tema | Açıklama |
-|---|---|
-| 🌑 Karanlık | Varsayılan — göz yorgunluğunu azaltır |
-| ☀️ Aydınlık | Açık arka plan — gündüz kullanımı için |
-
----
-
-## Performans Ayarları
-
-| Ayar | Öneri | Açıklama |
-|---|---|---|
-| ⚡ Donanım İvmesi (GPU) | Açık | Grafik işlemlerini GPU'ya yükler |
-| 🔋 Arka Plan Sekme Kısıtla | Açık | Pasif sekmeleri yavaşlatır, RAM tasarrufu sağlar |
-| 🖼️ Resimleri Yükle | Açık | Kapalıyken sayfalar görselsiz yüklenir, yavaş internet için |
-
----
-
-## İçe Aktarım
-
-📥 butonu veya Ayarlar → **Diğer Tarayıcıdan İçe Aktar**
-
-**Yer İmleri (HTML):**
-- Chrome/Edge: Ayarlar → Yer İmleri → Yer İmlerini Dışa Aktar
-- Firefox: Yer İmleri → Tüm Yer İmlerini Göster → HTML olarak dışa aktar
-
-**Şifreler (CSV):**
-- Chrome/Edge: Ayarlar → Otomatik Doldurma → Şifreler → Dışa Aktar
-
-> ⚠️ Şifre CSV dosyası hassastır. Aktarımdan sonra orijinal dosyayı sil.
-
----
-
-## Varsayılan Tarayıcı
-
-1. Ayarlar → **Windows Varsayılan Tarayıcı Yap** butonuna tıkla
-2. Açılan Windows Ayarlar sayfasında **ED Browser**'ı bul
-3. Seç — artık linklere tıklayınca ED Browser açılır
-
----
-
-## Klavye Kısayolları
-
-### Sekmeler
-| Kısayol | İşlev |
-|---|---|
-| `Ctrl+T` | Yeni sekme aç |
-| `Ctrl+W` | Aktif sekmeyi kapat |
-| `Ctrl+1` ... `Ctrl+9` | O numaralı sekmeye geç |
-
-### Gezinme
-| Kısayol | İşlev |
-|---|---|
-| `F5` / `Ctrl+R` | Sayfayı yenile |
+| :--- | :--- |
+| `Ctrl+T` / `Ctrl+W` | Yeni sekme aç / Aktif sekmeyi kapat |
+| `Ctrl+1` … `Ctrl+9` | İlgili sekmeye geç |
 | `Ctrl+L` | Adres çubuğuna odaklan |
-| `Alt+←` | Geri git |
-| `Alt+→` | İleri git |
-
-### Yer İmleri
-| Kısayol | İşlev |
-|---|---|
-| `Ctrl+D` | Yer imi ekle / kaldır |
-| `Ctrl+Shift+B` | Yer imi çubuğu göster/gizle |
-
-### Araçlar
-| Kısayol | İşlev |
-|---|---|
+| `F5` / `Ctrl+R` | Sayfayı yenile |
+| `Alt+←` / `Alt+→` | Geri / İleri git |
+| `Ctrl+D` | Yer imi ekle / düzenle / kaldır |
+| `Ctrl+Shift+B` | Yer imi çubuğunu göster / gizle |
 | `Ctrl+F` | Sayfada ara |
 | `Ctrl+P` | Sayfayı yazdır |
 | `Ctrl+Shift+J` | İndirilenler paneli |
-| `Ctrl+Shift+S` | Ekran görüntüsü al |
+| `Ctrl+Shift+S` | Ekran görüntüsü al (Tüm sayfa / Alan seç) |
 | `Ctrl+Shift+P` | Gizli mod penceresi aç |
-| `Ctrl++` / `Ctrl+-` | Yakınlaştır / Uzaklaştır |
-| `Ctrl+0` | Zoom sıfırla (%100) |
-| `F11` / `ESC` | Tam ekran aç/kapat |
-| `F12` | Geliştirici araçları |
+| `Ctrl++` / `Ctrl+-` / `Ctrl+0` | Yakınlaştır / Uzaklaştır / %100 sıfırla |
+| `F11` / `ESC` | Tam ekran aç / çık |
+| `F12` / `Ctrl+Shift+I` | Geliştirici araçlarını aç / kapat |
 
 ---
-Wiki https://github.com/edizdar/ED-Browser/wiki/ED-Browser-Rehber
 
-İndir https://github.com/edizdar/ED-Browser/releases
+## 🛠️ Kaynak Koddan Derleme
 
-Sürüm Notları https://github.com/edizdar/ED-Browser/blob/main/CHANGELOG.md
+Gereksinimler: **.NET 10 SDK** (Windows x64)
+
+```powershell
+# 1. Taşınabilir tek dosya .exe derle
+dotnet publish EDBrowser.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+
+# 2. Kurulum Sihirbazı (.exe) derle (taşınabilir sürümü içine gömer)
+dotnet publish Installer\EDBrowser.Setup.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish
+```
+
+---
 
 *ED Browser — Geliştirici: [Erol Dizdar](https://eroldizdar.tr)*
