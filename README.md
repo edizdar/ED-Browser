@@ -1,8 +1,8 @@
-# 🌐 ED Browser v4.4.0
+# 🌐 ED Browser v4.4.1
 
-> Reklam yok, izleme yok, telemetri yok, gereksiz RAM tüketimi yok. **Chromium (Edge WebView2)** motoruyla tam web uyumlu, **Yeniden Başlatmasız Anlık VPN Anahtarı**, **Yerleşik Canlı Ücretsiz VPN Sunucu Tarayıcısı**, **HTTPS-Only / WebRTC / DoH Gizlilik Kalkanı**, **Chrome Web Store & Microsoft Edge Add-ons** eklenti desteği sunan, yerel **WinForms GDI+** arayüzlü açık kaynak Windows masaüstü tarayıcısı.
+> Reklam yok, izleme yok, telemetri yok, gereksiz RAM tüketimi yok. **Chromium (Edge WebView2)** motoruyla tam web uyumlu, **Yeniden Başlatmasız Anlık VPN Anahtarı**, **Çoklu Site Doğrulamalı & Otomatik Yedekli Canlı Ücretsiz VPN Sunucu Tarayıcısı**, **HTTPS-Only / WebRTC / DoH Gizlilik Kalkanı**, **Chrome Web Store & Microsoft Edge Add-ons** eklenti desteği sunan, yerel **WinForms GDI+** arayüzlü açık kaynak Windows masaüstü tarayıcısı.
 
-[![Sürüm](https://img.shields.io/badge/S%C3%BCr%C3%BCm-v4.4.0-38bdf8?style=flat-square)](https://github.com/edizdar/ED-Browser/releases/latest)
+[![Sürüm](https://img.shields.io/badge/S%C3%BCr%C3%BCm-v4.4.1-38bdf8?style=flat-square)](https://github.com/edizdar/ED-Browser/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11%20(x64)-818cf8?style=flat-square)](https://github.com/edizdar/ED-Browser/releases)
 [![Gizlilik](https://img.shields.io/badge/Telemetri-S%C4%B1f%C4%B1r%20(PRIVACY.md)-34d399?style=flat-square)](PRIVACY.md)
 [![Lisans](https://img.shields.io/badge/Lisans-MIT-34d399?style=flat-square)](LICENSE)
@@ -15,8 +15,8 @@
 
 | Sürüm | Dosya | Boyut | Açıklama |
 | :--- | :--- | :--- | :--- |
-| 🛠️ **Kurulum Sürümü (Önerilen)** | `ED.Browser.Setup.4.4.0.exe` | **~2,10 MB** | Kurulum sihirbazı, Masaüstü & Başlat Menüsü kısayolları, Windows Programlar listesi ve `Uninstall.exe` içerir. Profil verileri `%LOCALAPPDATA%\EDBrowser4` altında saklanır. |
-| 🎒 **Taşınabilir (Portable) Sürüm** | `ED.Browser.4.4.0.Portable.exe` | **~1,88 MB** | Kurulum gerektirmez, USB veya herhangi bir klasörden çalışır. Tüm veriler yanındaki `EDBrowserData` klasöründe tutulur. |
+| 🛠️ **Kurulum Sürümü (Önerilen)** | `ED.Browser.Setup.4.4.1.exe` | **~2,12 MB** | Kurulum sihirbazı, Masaüstü & Başlat Menüsü kısayolları, Windows Programlar listesi ve `Uninstall.exe` içerir. Profil verileri `%LOCALAPPDATA%\EDBrowser4` altında saklanır. |
+| 🎒 **Taşınabilir (Portable) Sürüm** | `ED.Browser.4.4.1.Portable.exe` | **~1,89 MB** | Kurulum gerektirmez, USB veya herhangi bir klasörden çalışır. Tüm veriler yanındaki `EDBrowserData` klasöründe tutulur. |
 
 > **Önkoşul:** Windows 10/11'de yerleşik **Microsoft Edge WebView2** ve **.NET 10 Desktop Runtime (x64)** kullanır.
 
@@ -53,12 +53,12 @@ Adres çubuğu yanında canlı **`− %100 +` Yakınlaştırma**, **`⚡ RAM`**,
 
 ---
 
-## ⚡ v3.1.8 (Electron) vs v4.4.0 (WinForms + WebView2) Karşılaştırması
+## ⚡ v3.1.8 (Electron) vs v4.4.1 (WinForms + WebView2) Karşılaştırması
 
-| Ölçüt | ED Browser v3.1.8 (Electron) | ED Browser v4.4.0 (WinForms + WebView2) |
+| Ölçüt | ED Browser v3.1.8 (Electron) | ED Browser v4.4.1 (WinForms + WebView2) |
 | :--- | :--- | :--- |
-| **Taşınabilir `.exe` Boyutu** | 72,67 MB | **~1,88 MB** (**%97,4 daha küçük**) |
-| **Kurulum `.exe` Boyutu** | 73,00 MB | **~2,10 MB** (**%97,1 daha küçük**) |
+| **Taşınabilir `.exe` Boyutu** | 72,67 MB | **~1,89 MB** (**%97,4 daha küçük**) |
+| **Kurulum `.exe` Boyutu** | 73,00 MB | **~2,12 MB** (**%97,1 daha küçük**) |
 | **Çalıştırılınca Açılan Disk Alanı** | 251,72 MB | **~1,9–2,1 MB** (sistem WebView2 paylaşılır) |
 | **Arayüz Motoru** | Ekstra Chromium Renderer süreci | **Saf yerel WinForms GDI+** (0 ekstra renderer) |
 | **Pasif Sekme Bellek Yönetimi** | Yalnızca JS zamanlayıcı kısma | **`MemoryUsageTargetLevel.Low` + `TrySuspendAsync()` + Derin Boşaltma (`0 MB`)** |

@@ -35,7 +35,7 @@ public sealed class VpnProfile
 
 public sealed class BrowserSettings
 {
-    public string Version { get; set; } = "4.4.0";
+    public string Version { get; set; } = "4.4.1";
     public string HomePage { get; set; } = "https://www.google.com";
     public string SearchEngine { get; set; } = "https://www.google.com/search?q=";
     public BrowserTheme Theme { get; set; } = BrowserTheme.Dark;

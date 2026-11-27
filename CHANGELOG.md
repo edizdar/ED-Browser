@@ -2,6 +2,15 @@
 
 ---
 
+## v4.4.1 — `ERR_TUNNEL_CONNECTION_FAILED` Düzeltmesi, Çoklu Site VPN Doğrulama & Otomatik Yedekli Failover
+- 🐛 **Ücretsiz VPN'de `ERR_TUNNEL_CONNECTION_FAILED` Hatası Giderildi:**
+  - Yalnızca `cloudflare.com` testine yanıt verip diğer sitelerde (`ip-adresim.net`, `google.com`) bağlantıyı kesen kısıtlı/bozuk proxy düğümleri artık çoklu hedef HTTPS doğrulaması (`google.com/generate_204` + `cloudflare.com/cdn-cgi/trace`) ile baştan eleniyor.
+- 🔁 **Otomatik Yedek Sunucuya Geçiş (`LocalVpnRouterService` Failover):**
+  - El sıkışma zaman aşımı koruması (`5,5 sn`) ve çalışmayan bir ücretsiz röleden otomatik olarak sıradaki doğrulanmış yedek sunucuya geçiş (`FailoverServerPromoted`) eklendi; rozet yeni sağlıklı ülkeyi otomatik güncelliyor.
+  - Açılışta eski (`v4.4.0`) önbellekten kalan bozuk sunucular sıfırlanıp sağlıklı sunucu otomatik doğrulanır.
+
+---
+
 ## v4.4.0 — Tek Tıkla Anlık VPN, Sıfır Yeniden Başlatmalı Router & Yerleşik Sunucu Tarayıcısı
 - ⚡ **Yeniden Başlatmasız Anlık VPN Anahtarı (`Services/LocalVpnRouterService.cs`):**
   - Tarayıcı başlangıcında `127.0.0.1` üzerinde hafif asenkron HTTP/CONNECT & SOCKS5 (RFC 1928/1929) yönlendirici başlar; WebView2 bu yerel yönlendiriciye bağlı kalır.

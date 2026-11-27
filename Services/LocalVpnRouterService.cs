@@ -7,9 +7,9 @@ namespace EDBrowser.Services;
 
 /// <summary>
 /// In-process local HTTP/HTTPS CONNECT &amp; plain-HTTP proxy router bound to 127.0.0.1:&lt;ephemeral&gt;.
-/// WebView2 points to this router once at startup; toggling VPN ON/OFF or switching between Direct,
-/// FreeCommunity, Cloudflare WARP, Tor, or Custom SOCKS5/HTTP upstream tunnels takes effect on the
-/// very next connection with zero browser restart.
+/// WebView2 points to this router once at startup; toggling VPN ON/OFF or switching tunnels takes
+/// effect on the very next connection with zero browser restart. Includes per-handshake timeouts
+/// and automatic multi-relay failover for FreeCommunity relays.
 /// </summary>
 public sealed class LocalVpnRouterService : IDisposable
 {
@@ -26,16 +26,25 @@ public sealed class LocalVpnRouterService : IDisposable
         int UpstreamPort,
         string Username,
         string Password,
-        string Summary);
+        string Summary,
+        bool IsFreeCommunity = false,
+        FreeVpnServer? FreeServer = null);
 
     private readonly object _lock = new();
+    private readonly List<(FreeVpnServer Server, RouteConfig Route)> _failoverPool = new();
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private volatile RouteConfig _route = new(RouteKind.Direct, "", 0, "", "", "Doğrudan (VPN Kapalı)");
 
+    public event Action<FreeVpnServer>? FailoverServerPromoted;
+
     public int ListenPort { get; private set; }
     public bool IsRunning => ListenPort > 0 && _cts is { IsCancellationRequested: false };
     public string CurrentRouteSummary => _route.Summary;
+    public bool HasFailoverRoutes
+    {
+        get { lock (_lock) return _failoverPool.Count > 0; }
+    }
 
     public void Start()
     {
@@ -47,6 +56,22 @@ public sealed class LocalVpnRouterService : IDisposable
             _listener.Start(128);
             ListenPort = ((IPEndPoint)_listener.LocalEndpoint).Port;
             _ = Task.Run(() => AcceptLoopAsync(_listener, _cts.Token));
+        }
+    }
+
+    public void SetFreeFailoverPool(IEnumerable<FreeVpnServer> servers)
+    {
+        var items = new List<(FreeVpnServer, RouteConfig)>();
+        foreach (var srv in servers)
+        {
+            if (TryBuildRouteFromUrl(srv.ProxyUrl, "", "", srv.DisplayText, isFree: true, srv, out var cfg))
+                items.Add((srv, cfg));
+        }
+
+        lock (_lock)
+        {
+            _failoverPool.Clear();
+            _failoverPool.AddRange(items);
         }
     }
 
@@ -73,15 +98,64 @@ public sealed class LocalVpnRouterService : IDisposable
         }
 
         var effUrl = ProxyService.ResolveEffectiveProxyUrl(s, ignoreVpnEnabledFlag: true);
-        if (string.IsNullOrWhiteSpace(effUrl) || !Uri.TryCreate(effUrl, UriKind.Absolute, out var uri) || string.IsNullOrWhiteSpace(uri.Host))
+        if (string.IsNullOrWhiteSpace(effUrl))
         {
             _route = new RouteConfig(RouteKind.Direct, "", 0, "", "", "Sunucu bekleniyor (Doğrudan)");
             return;
         }
 
-        int port = uri.Port > 0 ? uri.Port : (uri.Scheme.StartsWith("socks", StringComparison.OrdinalIgnoreCase) ? 1080 : 8080);
         string user = "";
         string pass = "";
+        if (s.ProxyMode == ProxyMode.Custom)
+        {
+            var prof = ProxyService.GetActiveVpnProfile(s);
+            if (prof is not null && !string.IsNullOrEmpty(prof.Username))
+            {
+                user = prof.Username;
+                pass = prof.Password;
+            }
+        }
+
+        FreeVpnServer? freeSrv = s.ProxyMode == ProxyMode.FreeCommunity
+            ? new FreeVpnServer(
+                effUrl,
+                effUrl.StartsWith("socks", StringComparison.OrdinalIgnoreCase) ? "socks5" : "http",
+                string.IsNullOrEmpty(s.ActiveFreeServerCountry) ? "GL" : s.ActiveFreeServerCountry,
+                ProxyService.MapCountryNameTr(s.ActiveFreeServerCountry),
+                0,
+                "")
+            : null;
+
+        string summaryHint = s.ProxyMode switch
+        {
+            ProxyMode.CloudflareWarp => "Cloudflare WARP (SOCKS5 :40000)",
+            ProxyMode.Tor => "Tor Ağı (SOCKS5)",
+            ProxyMode.FreeCommunity => string.IsNullOrEmpty(s.ActiveFreeServerLabel) ? $"Ücretsiz VPN ({effUrl})" : s.ActiveFreeServerLabel,
+            _ => effUrl
+        };
+
+        if (TryBuildRouteFromUrl(effUrl, user, pass, summaryHint, s.ProxyMode == ProxyMode.FreeCommunity, freeSrv, out var cfg))
+            _route = cfg;
+        else
+            _route = new RouteConfig(RouteKind.Direct, "", 0, "", "", "Sunucu bekleniyor (Doğrudan)");
+    }
+
+    private static bool TryBuildRouteFromUrl(
+        string rawUrl,
+        string fallbackUser,
+        string fallbackPass,
+        string summary,
+        bool isFree,
+        FreeVpnServer? freeSrv,
+        out RouteConfig config)
+    {
+        config = new RouteConfig(RouteKind.Direct, "", 0, "", "", "Doğrudan");
+        if (!Uri.TryCreate(rawUrl.Trim(), UriKind.Absolute, out var uri) || string.IsNullOrWhiteSpace(uri.Host))
+            return false;
+
+        int port = uri.Port > 0 ? uri.Port : (uri.Scheme.StartsWith("socks", StringComparison.OrdinalIgnoreCase) ? 1080 : 8080);
+        string user = fallbackUser;
+        string pass = fallbackPass;
         if (!string.IsNullOrEmpty(uri.UserInfo))
         {
             int colon = uri.UserInfo.IndexOf(':');
@@ -95,36 +169,20 @@ public sealed class LocalVpnRouterService : IDisposable
                 user = Uri.UnescapeDataString(uri.UserInfo);
             }
         }
-        else if (s.ProxyMode == ProxyMode.Custom)
-        {
-            var prof = ProxyService.GetActiveVpnProfile(s);
-            if (prof is not null && !string.IsNullOrEmpty(prof.Username))
-            {
-                user = prof.Username;
-                pass = prof.Password;
-            }
-        }
 
         bool isSocks5 = uri.Scheme.Equals("socks5", StringComparison.OrdinalIgnoreCase) ||
                         uri.Scheme.Equals("socks5h", StringComparison.OrdinalIgnoreCase);
 
-        string summary = s.ProxyMode switch
-        {
-            ProxyMode.CloudflareWarp => "Cloudflare WARP (SOCKS5 :40000)",
-            ProxyMode.Tor => $"Tor Ağı (SOCKS5 :{port})",
-            ProxyMode.FreeCommunity => string.IsNullOrEmpty(s.ActiveFreeServerLabel)
-                ? $"Ücretsiz VPN ({uri.Host}:{port})"
-                : s.ActiveFreeServerLabel,
-            _ => $"{(isSocks5 ? "SOCKS5" : "HTTP")} ({uri.Host}:{port})"
-        };
-
-        _route = new RouteConfig(
+        config = new RouteConfig(
             isSocks5 ? RouteKind.Socks5 : RouteKind.HttpProxy,
             uri.Host,
             port,
             user,
             pass,
-            summary);
+            summary,
+            isFree,
+            freeSrv);
+        return true;
     }
 
     private async Task AcceptLoopAsync(TcpListener listener, CancellationToken ct)
@@ -182,12 +240,12 @@ public sealed class LocalVpnRouterService : IDisposable
                     TcpClient? upstream = null;
                     try
                     {
-                        upstream = await OpenTunnelAsync(host, port, route, ct).ConfigureAwait(false);
+                        upstream = await OpenTunnelWithFailoverAsync(host, port, route, ct).ConfigureAwait(false);
                         using (upstream)
                         {
                             upstream.NoDelay = true;
                             using var upStream = upstream.GetStream();
-                            var okResp = Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\nProxy-Agent: ED-Browser-Router/4.4\r\n\r\n");
+                            var okResp = Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\nProxy-Agent: ED-Browser-Router/4.4.1\r\n\r\n");
                             await clientStream.WriteAsync(okResp, ct).ConfigureAwait(false);
                             await clientStream.FlushAsync(ct).ConfigureAwait(false);
 
@@ -220,7 +278,7 @@ public sealed class LocalVpnRouterService : IDisposable
                     TcpClient? upstream = null;
                     try
                     {
-                        upstream = await ConnectWithTimeoutAsync(route.UpstreamHost, route.UpstreamPort, 6000, ct).ConfigureAwait(false);
+                        upstream = await ConnectWithTimeoutAsync(route.UpstreamHost, route.UpstreamPort, 5000, ct).ConfigureAwait(false);
                         using (upstream)
                         {
                             upstream.NoDelay = true;
@@ -236,6 +294,29 @@ public sealed class LocalVpnRouterService : IDisposable
                     catch
                     {
                         upstream?.Dispose();
+                        if (route.IsFreeCommunity)
+                        {
+                            try
+                            {
+                                upstream = await OpenTunnelWithFailoverAsync(targetHost, targetPort, route, ct, skipPrimary: true).ConfigureAwait(false);
+                                using (upstream)
+                                {
+                                    upstream.NoDelay = true;
+                                    using var upStream = upstream.GetStream();
+                                    var rewritten = RewriteToOriginHttpRequest(method, pathAndQuery, version, headerText[(firstLineEnd + 2)..]);
+                                    await upStream.WriteAsync(rewritten, ct).ConfigureAwait(false);
+                                    if (bodyPrefix.Length > 0)
+                                        await upStream.WriteAsync(bodyPrefix, ct).ConfigureAwait(false);
+                                    await upStream.FlushAsync(ct).ConfigureAwait(false);
+                                    await PumpBidirectionalAsync(clientStream, upStream, ct).ConfigureAwait(false);
+                                }
+                                return;
+                            }
+                            catch
+                            {
+                                upstream?.Dispose();
+                            }
+                        }
                         await WriteErrorAsync(clientStream, "502 Bad Gateway", ct).ConfigureAwait(false);
                     }
                     return;
@@ -245,7 +326,7 @@ public sealed class LocalVpnRouterService : IDisposable
                 TcpClient? directOrSocks = null;
                 try
                 {
-                    directOrSocks = await OpenTunnelAsync(targetHost, targetPort, route, ct).ConfigureAwait(false);
+                    directOrSocks = await OpenTunnelWithFailoverAsync(targetHost, targetPort, route, ct).ConfigureAwait(false);
                     using (directOrSocks)
                     {
                         directOrSocks.NoDelay = true;
@@ -271,6 +352,81 @@ public sealed class LocalVpnRouterService : IDisposable
         }
     }
 
+    private async Task<TcpClient> OpenTunnelWithFailoverAsync(
+        string targetHost,
+        int targetPort,
+        RouteConfig primary,
+        CancellationToken ct,
+        bool skipPrimary = false)
+    {
+        if (!skipPrimary)
+        {
+            try
+            {
+                using var hsCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                hsCts.CancelAfter(5500);
+                return await OpenTunnelAsync(targetHost, targetPort, primary, hsCts.Token).ConfigureAwait(false);
+            }
+            catch when (primary.IsFreeCommunity && !ct.IsCancellationRequested)
+            {
+                // Fall through to backup relays
+            }
+        }
+
+        List<(FreeVpnServer Server, RouteConfig Route)> backups;
+        lock (_lock)
+        {
+            backups = _failoverPool
+                .Where(x => !(x.Route.UpstreamHost.Equals(primary.UpstreamHost, StringComparison.OrdinalIgnoreCase) &&
+                              x.Route.UpstreamPort == primary.UpstreamPort))
+                .Take(3)
+                .ToList();
+        }
+
+        Exception? lastErr = null;
+        foreach (var (srv, cfg) in backups)
+        {
+            if (ct.IsCancellationRequested) break;
+            try
+            {
+                using var hsCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                hsCts.CancelAfter(4500);
+                var client = await OpenTunnelAsync(targetHost, targetPort, cfg, hsCts.Token).ConfigureAwait(false);
+
+                // Promote working relay so subsequent connections don't waste time hitting dead primary
+                bool promoted = false;
+                lock (_lock)
+                {
+                    if (_route.UpstreamHost.Equals(primary.UpstreamHost, StringComparison.OrdinalIgnoreCase) &&
+                        _route.UpstreamPort == primary.UpstreamPort)
+                    {
+                        _route = cfg;
+                        promoted = true;
+                        int idx = _failoverPool.FindIndex(x =>
+                            x.Route.UpstreamHost.Equals(primary.UpstreamHost, StringComparison.OrdinalIgnoreCase) &&
+                            x.Route.UpstreamPort == primary.UpstreamPort);
+                        if (idx >= 0)
+                        {
+                            var failedEntry = _failoverPool[idx];
+                            _failoverPool.RemoveAt(idx);
+                            _failoverPool.Add(failedEntry);
+                        }
+                    }
+                }
+                if (promoted)
+                    FailoverServerPromoted?.Invoke(srv);
+
+                return client;
+            }
+            catch (Exception ex)
+            {
+                lastErr = ex;
+            }
+        }
+
+        throw lastErr ?? new IOException("All free VPN relays failed to tunnel target host.");
+    }
+
     private static async Task<TcpClient> OpenTunnelAsync(string targetHost, int targetPort, RouteConfig route, CancellationToken ct)
     {
         if (route.Kind == RouteKind.Direct)
@@ -278,12 +434,12 @@ public sealed class LocalVpnRouterService : IDisposable
 
         if (route.Kind == RouteKind.HttpProxy)
         {
-            var client = await ConnectWithTimeoutAsync(route.UpstreamHost, route.UpstreamPort, 6000, ct).ConfigureAwait(false);
+            var client = await ConnectWithTimeoutAsync(route.UpstreamHost, route.UpstreamPort, 4000, ct).ConfigureAwait(false);
             try
             {
                 var stream = client.GetStream();
                 var sb = new StringBuilder();
-                sb.Append($"CONNECT {targetHost}:{targetPort} HTTP/1.1\r\nHost: {targetHost}:{targetPort}\r\n");
+                sb.Append($"CONNECT {targetHost}:{targetPort} HTTP/1.1\r\nHost: {targetHost}:{targetPort}\r\nProxy-Connection: keep-alive\r\n");
                 if (!string.IsNullOrEmpty(route.Username))
                 {
                     var creds = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{route.Username}:{route.Password}"));
@@ -295,6 +451,8 @@ public sealed class LocalVpnRouterService : IDisposable
                 await stream.FlushAsync(ct).ConfigureAwait(false);
 
                 var (respHeaders, _) = await ReadHttpHeaderBlockAsync(stream, ct).ConfigureAwait(false);
+                if (respHeaders.Length == 0)
+                    throw new IOException("Upstream proxy closed connection during CONNECT");
                 var statusLine = Encoding.ASCII.GetString(respHeaders).Split("\r\n", 2)[0];
                 if (!statusLine.Contains(" 200", StringComparison.Ordinal))
                     throw new IOException("Upstream proxy CONNECT failed: " + statusLine);
@@ -309,7 +467,7 @@ public sealed class LocalVpnRouterService : IDisposable
         }
 
         // SOCKS5 (RFC 1928 + optional RFC 1929 auth) with remote domain resolution (ATYP = 0x03)
-        var socks = await ConnectWithTimeoutAsync(route.UpstreamHost, route.UpstreamPort, 6000, ct).ConfigureAwait(false);
+        var socks = await ConnectWithTimeoutAsync(route.UpstreamHost, route.UpstreamPort, 4000, ct).ConfigureAwait(false);
         try
         {
             var stream = socks.GetStream();

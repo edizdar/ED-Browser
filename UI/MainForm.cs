@@ -702,6 +702,8 @@ public sealed class MainForm : Form
         _memoryTimer.Tick += async (_, _) => await OnMemoryTimerTickAsync();
         _memoryTimer.Start();
 
+        _ctx.VpnRouter.FailoverServerPromoted += OnVpnFailoverPromoted;
+
         Shown += async (_, _) =>
         {
             if (skipInitialNavigate)
@@ -714,6 +716,8 @@ public sealed class MainForm : Form
                     ? initialUrl
                     : _ctx.Settings.HomePage;
                 await AddTabAsync(startUrl);
+                if (_ctx.Settings.VpnEnabled && _ctx.Settings.ProxyMode == ProxyMode.FreeCommunity)
+                    _ = EnsureHealthyFreeServerOnStartupAsync();
             }
             RefreshMemoryBadge();
             if (!_incognito && !skipInitialNavigate && _ctx.Settings.CheckUpdatesOnStartup)
@@ -2230,8 +2234,58 @@ public sealed class MainForm : Form
         catch { }
     }
 
+    private void OnVpnFailoverPromoted(FreeVpnServer srv)
+    {
+        if (IsDisposed || !IsHandleCreated) return;
+        try
+        {
+            BeginInvoke(() =>
+            {
+                if (IsDisposed) return;
+                _ctx.Settings.ActiveFreeServerUrl = srv.ProxyUrl;
+                _ctx.Settings.ActiveFreeServerLabel = srv.DisplayText;
+                _ctx.Settings.ActiveFreeServerCountry = srv.CountryCode;
+                _ctx.Storage.SaveSettings(_ctx.Settings);
+                UpdateVpnBadge();
+            });
+        }
+        catch { }
+    }
+
+    private async Task EnsureHealthyFreeServerOnStartupAsync()
+    {
+        try
+        {
+            var curUrl = _ctx.Settings.ActiveFreeServerUrl;
+            bool ok = !string.IsNullOrWhiteSpace(curUrl) && await ProxyService.VerifyRelayMultiSiteAsync(curUrl, 3500);
+            if (!ok || !_ctx.VpnRouter.HasFailoverRoutes)
+            {
+                var found = await ProxyService.DiscoverVerifiedFreeRelaysAsync(8);
+                if (IsDisposed || found.Count == 0) return;
+
+                _ctx.VpnRouter.SetFreeFailoverPool(found);
+                if (!ok)
+                {
+                    var best = found[0];
+                    BeginInvoke(() =>
+                    {
+                        if (IsDisposed) return;
+                        _ctx.Settings.ActiveFreeServerUrl = best.ProxyUrl;
+                        _ctx.Settings.ActiveFreeServerLabel = best.DisplayText;
+                        _ctx.Settings.ActiveFreeServerCountry = best.CountryCode;
+                        _ctx.VpnRouter.ApplySettings(_ctx.Settings);
+                        _ctx.Storage.SaveSettings(_ctx.Settings);
+                        UpdateVpnBadge();
+                    });
+                }
+            }
+        }
+        catch { }
+    }
+
     private void CleanupOnExit()
     {
+        _ctx.VpnRouter.FailoverServerPromoted -= OnVpnFailoverPromoted;
         _memoryTimer.Stop();
         _activeAppMenu?.SafeClose();
         _activeVpnPopup?.SafeClose();
@@ -2495,6 +2549,76 @@ public sealed class MainForm : Form
                 echoCts.Cancel();
                 Assert(router.IsRunning && router.ListenPort > 0 && body1 == "PONG_OK" && switchedSummaryOk && body2 == "PONG_OK",
                     $"LocalVpnRouterService loopback proxy & live tunnel switching verified (port={router.ListenPort})");
+
+                // 8. Test LocalVpnRouterService automatic failover promotion on dead primary FreeCommunity relay
+                using var backupProxy = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+                using var targetEcho = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+                backupProxy.Start();
+                targetEcho.Start();
+                int backupPort = ((System.Net.IPEndPoint)backupProxy.LocalEndpoint).Port;
+                int targetPort = ((System.Net.IPEndPoint)targetEcho.LocalEndpoint).Port;
+                using var foCts = new CancellationTokenSource();
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        using var c = await targetEcho.AcceptTcpClientAsync(foCts.Token);
+                        using var st = c.GetStream();
+                        var b = new byte[64];
+                        _ = await st.ReadAsync(b, foCts.Token);
+                        await st.WriteAsync(System.Text.Encoding.ASCII.GetBytes("TUNNEL_FAILOVER_OK"), foCts.Token);
+                    }
+                    catch { }
+                });
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        using var c = await backupProxy.AcceptTcpClientAsync(foCts.Token);
+                        using var st = c.GetStream();
+                        var b = new byte[1024];
+                        _ = await st.ReadAsync(b, foCts.Token);
+                        await st.WriteAsync(System.Text.Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\n\r\n"), foCts.Token);
+                        using var up = new System.Net.Sockets.TcpClient();
+                        await up.ConnectAsync(System.Net.IPAddress.Loopback, targetPort, foCts.Token);
+                        using var ups = up.GetStream();
+                        var t1 = st.CopyToAsync(ups, foCts.Token);
+                        var t2 = ups.CopyToAsync(st, foCts.Token);
+                        await Task.WhenAny(t1, t2);
+                    }
+                    catch { }
+                });
+
+                FreeVpnServer? promoted = null;
+                router.FailoverServerPromoted += s => promoted = s;
+                var deadSrv = new FreeVpnServer("http://127.0.0.1:1", "http", "XX", "Dead", 999, "127.0.0.1");
+                var goodSrv = new FreeVpnServer($"http://127.0.0.1:{backupPort}", "http", "DE", "Almanya", 12, "127.0.0.1");
+                router.SetFreeFailoverPool(new[] { deadSrv, goodSrv });
+                router.ApplySettings(new BrowserSettings
+                {
+                    VpnEnabled = true,
+                    ProxyMode = ProxyMode.FreeCommunity,
+                    ActiveFreeServerUrl = deadSrv.ProxyUrl,
+                    ActiveFreeServerCountry = "XX",
+                    ActiveFreeServerLabel = "Dead"
+                });
+
+                using var clientViaRouter = new System.Net.Sockets.TcpClient();
+                clientViaRouter.Connect(System.Net.IPAddress.Loopback, router.ListenPort);
+                using var rStream = clientViaRouter.GetStream();
+                var connectReq = System.Text.Encoding.ASCII.GetBytes($"CONNECT 127.0.0.1:{targetPort} HTTP/1.1\r\nHost: 127.0.0.1:{targetPort}\r\n\r\n");
+                rStream.Write(connectReq, 0, connectReq.Length);
+                var respBuf = new byte[512];
+                int n = rStream.Read(respBuf, 0, respBuf.Length);
+                var respHead = System.Text.Encoding.ASCII.GetString(respBuf, 0, n);
+                rStream.Write(System.Text.Encoding.ASCII.GetBytes("HI"), 0, 2);
+                int n2 = rStream.Read(respBuf, 0, respBuf.Length);
+                var tunnelPayload = System.Text.Encoding.ASCII.GetString(respBuf, 0, n2);
+                foCts.Cancel();
+
+                Assert(respHead.Contains("200") && tunnelPayload == "TUNNEL_FAILOVER_OK" && promoted?.CountryCode == "DE",
+                    "LocalVpnRouterService automatically fails over dead FreeCommunity relay and promotes healthy backup");
             }
 
             dummyCtx.VpnRouter.Dispose();
@@ -2511,6 +2635,66 @@ public sealed class MainForm : Form
             try { File.WriteAllLines(logPath, logLines); } catch { }
         }
         return failed == 0 ? 0 : 1;
+    }
+
+    public static int VerifyLiveVpnEndToEnd(string? logPath = null)
+    {
+        var lines = new List<string>();
+        void Log(string m) { Console.WriteLine(m); lines.Add(m); }
+
+        int exit = 1;
+        using var router = new LocalVpnRouterService();
+        try
+        {
+            var found = ProxyService.DiscoverVerifiedFreeRelaysAsync(6).GetAwaiter().GetResult();
+            Log($"Verified multi-site relays found: {found.Count}");
+            foreach (var s in found)
+                Log($" - {s.DisplayText} | IP={s.ExitIp} | {s.ProxyUrl}");
+
+            if (found.Count > 0)
+            {
+                router.Start();
+                router.SetFreeFailoverPool(found);
+                var cfg = new BrowserSettings
+                {
+                    VpnEnabled = true,
+                    ProxyMode = ProxyMode.FreeCommunity,
+                    ActiveFreeServerUrl = found[0].ProxyUrl,
+                    ActiveFreeServerCountry = found[0].CountryCode,
+                    ActiveFreeServerLabel = found[0].DisplayText
+                };
+                router.ApplySettings(cfg);
+
+                using var h = new System.Net.Http.SocketsHttpHandler
+                {
+                    Proxy = new System.Net.WebProxy($"http://127.0.0.1:{router.ListenPort}"),
+                    UseProxy = true,
+                    ConnectTimeout = TimeSpan.FromSeconds(6)
+                };
+                using var http = new System.Net.Http.HttpClient(h) { Timeout = TimeSpan.FromSeconds(10) };
+
+                var gResp = http.GetAsync("https://www.google.com/generate_204").GetAwaiter().GetResult();
+                var ipResp = http.GetAsync("https://ip-adresim.net/").GetAwaiter().GetResult();
+                Log($"Live Router -> google/generate_204: {(int)gResp.StatusCode}");
+                Log($"Live Router -> https://ip-adresim.net/: {(int)ipResp.StatusCode}");
+
+                if ((int)gResp.StatusCode is 204 or 200 && (int)ipResp.StatusCode is >= 200 and < 400)
+                {
+                    Log("LIVE VPN END-TO-END PASS");
+                    exit = 0;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log("[LIVE EXCEPTION] " + ex.Message);
+        }
+
+        if (!string.IsNullOrEmpty(logPath))
+        {
+            try { File.WriteAllLines(logPath, lines); } catch { }
+        }
+        return exit;
     }
 
     public static void RenderUiPreview(string outDir)

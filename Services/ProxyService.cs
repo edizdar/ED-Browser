@@ -70,7 +70,32 @@ public static partial class ProxyService
         ["TW"] = "Tayvan",
         ["UA"] = "Ukrayna",
         ["ID"] = "Endonezya",
-        ["TH"] = "Tayland"
+        ["TH"] = "Tayland",
+        ["VN"] = "Vietnam",
+        ["SA"] = "S. Arabistan",
+        ["CM"] = "Kamerun",
+        ["MX"] = "Meksika",
+        ["AR"] = "Arjantin",
+        ["CL"] = "Şili",
+        ["CO"] = "Kolombiya",
+        ["ZA"] = "G. Afrika",
+        ["AE"] = "BAE",
+        ["IL"] = "İsrail",
+        ["BG"] = "Bulgaristan",
+        ["GR"] = "Yunanistan",
+        ["HU"] = "Macaristan",
+        ["DK"] = "Danimarka",
+        ["PT"] = "Portekiz",
+        ["SK"] = "Slovakya",
+        ["LV"] = "Letonya",
+        ["LT"] = "Litvanya",
+        ["EE"] = "Estonya",
+        ["MY"] = "Malezya",
+        ["PH"] = "Filipinler",
+        ["BD"] = "Bangladeş",
+        ["PK"] = "Pakistan",
+        ["EG"] = "Mısır",
+        ["RU"] = "Rusya"
     };
 
     [GeneratedRegex(@"ip=(.+)", RegexOptions.Compiled)]
@@ -277,6 +302,29 @@ public static partial class ProxyService
 
     private sealed record CandidateRelay(string ProxyUrl, string Protocol, string CountryCode, string FallbackCountry);
 
+    public static async Task<bool> VerifyRelayMultiSiteAsync(string proxyUrl, int timeoutMs = 4000, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(proxyUrl)) return false;
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(timeoutMs);
+            using var handler = new SocketsHttpHandler
+            {
+                Proxy = new WebProxy(proxyUrl.Trim()),
+                UseProxy = true,
+                ConnectTimeout = TimeSpan.FromMilliseconds(Math.Min(2800, timeoutMs))
+            };
+            using var client = new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(timeoutMs) };
+            using var resp = await client.GetAsync("https://www.google.com/generate_204", cts.Token).ConfigureAwait(false);
+            return (int)resp.StatusCode is 204 or 200;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public static async Task<List<FreeVpnServer>> DiscoverVerifiedFreeRelaysAsync(int maxVerified = 8, CancellationToken ct = default)
     {
         var candidates = new Dictionary<string, CandidateRelay>(StringComparer.OrdinalIgnoreCase);
@@ -287,21 +335,23 @@ public static partial class ProxyService
         var tGeoNode = FetchGeoNodeCandidatesAsync(fetchHttp, ct);
         await Task.WhenAll(tProxyScrape, tGeoNode).ConfigureAwait(false);
 
-        foreach (var c in tProxyScrape.Result.Concat(tGeoNode.Result))
+        // Interleave HTTP and SOCKS5 so broken/restricted SOCKS5 nodes don't starve working HTTP relays
+        var ps = tProxyScrape.Result;
+        var gn = tGeoNode.Result;
+        int maxCount = Math.Max(ps.Count, gn.Count);
+        for (int i = 0; i < maxCount; i++)
         {
-            candidates.TryAdd(c.ProxyUrl, c);
+            if (i < ps.Count) candidates.TryAdd(ps[i].ProxyUrl, ps[i]);
+            if (i < gn.Count) candidates.TryAdd(gn[i].ProxyUrl, gn[i]);
         }
 
         if (candidates.Count == 0)
             return new List<FreeVpnServer>();
 
-        var ordered = candidates.Values
-            .OrderByDescending(c => c.Protocol.Equals("socks5", StringComparison.OrdinalIgnoreCase))
-            .Take(36)
-            .ToList();
+        var ordered = candidates.Values.Take(60).ToList();
 
         var verified = new ConcurrentBag<FreeVpnServer>();
-        using var sem = new SemaphoreSlim(10, 10);
+        using var sem = new SemaphoreSlim(16, 16);
         using var verifyCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
         var tasks = ordered.Select(async cand =>
@@ -320,20 +370,25 @@ public static partial class ProxyService
             {
                 if (verifyCts.IsCancellationRequested) return;
                 using var perProbeCts = CancellationTokenSource.CreateLinkedTokenSource(verifyCts.Token);
-                perProbeCts.CancelAfter(TimeSpan.FromMilliseconds(3500));
+                perProbeCts.CancelAfter(TimeSpan.FromMilliseconds(4200));
 
                 using var handler = new SocketsHttpHandler
                 {
                     Proxy = new WebProxy(cand.ProxyUrl),
                     UseProxy = true,
-                    ConnectTimeout = TimeSpan.FromMilliseconds(2800)
+                    ConnectTimeout = TimeSpan.FromMilliseconds(2600)
                 };
-                using var client = new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(3400) };
+                using var client = new HttpClient(handler) { Timeout = TimeSpan.FromMilliseconds(4000) };
 
+                // Check 1: General arbitrary HTTPS site (eliminates Cloudflare-only reverse proxies like broken CZ node)
                 var sw = Stopwatch.StartNew();
-                var trace = await client.GetStringAsync("https://cloudflare.com/cdn-cgi/trace", perProbeCts.Token).ConfigureAwait(false);
-                sw.Stop();
+                using var gResp = await client.GetAsync("https://www.google.com/generate_204", perProbeCts.Token).ConfigureAwait(false);
+                if ((int)gResp.StatusCode is not (204 or 200))
+                    return;
+                long googleMs = sw.ElapsedMilliseconds;
 
+                // Check 2: Cloudflare trace (verifies multi-host HTTPS CONNECT tunneling + reveals exit IP & country)
+                var trace = await client.GetStringAsync("https://cloudflare.com/cdn-cgi/trace", perProbeCts.Token).ConfigureAwait(false);
                 var ip = IpRegex().Match(trace).Groups[1].Value.Trim();
                 var loc = LocRegex().Match(trace).Groups[1].Value.Trim();
                 if (string.IsNullOrWhiteSpace(ip)) return;
@@ -347,7 +402,7 @@ public static partial class ProxyService
                     cand.Protocol,
                     cc,
                     name,
-                    (int)Math.Max(1, sw.ElapsedMilliseconds),
+                    (int)Math.Max(1, googleMs),
                     ip));
 
                 if (verified.Count >= maxVerified)
@@ -355,7 +410,7 @@ public static partial class ProxyService
             }
             catch
             {
-                // Candidate unreachable or slow
+                // Candidate unreachable, slow, or blocked general HTTPS CONNECT
             }
             finally
             {
@@ -376,7 +431,7 @@ public static partial class ProxyService
         var list = new List<CandidateRelay>();
         try
         {
-            const string url = "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=json&limit=40";
+            const string url = "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=json&limit=80";
             var json = await http.GetStringAsync(url, ct).ConfigureAwait(false);
             using var doc = JsonDocument.Parse(json);
             if (!doc.RootElement.TryGetProperty("proxies", out var arr) || arr.ValueKind != JsonValueKind.Array)
@@ -413,7 +468,7 @@ public static partial class ProxyService
         var list = new List<CandidateRelay>();
         try
         {
-            const string url = "https://proxylist.geonode.com/api/proxy-list?limit=35&page=1&sort_by=lastChecked&sort_type=desc&protocols=socks5%2Chttp";
+            const string url = "https://proxylist.geonode.com/api/proxy-list?limit=50&page=1&sort_by=lastChecked&sort_type=desc&protocols=socks5%2Chttp";
             var json = await http.GetStringAsync(url, ct).ConfigureAwait(false);
             using var doc = JsonDocument.Parse(json);
             if (!doc.RootElement.TryGetProperty("data", out var arr) || arr.ValueKind != JsonValueKind.Array)

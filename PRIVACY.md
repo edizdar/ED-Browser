@@ -1,4 +1,4 @@
-# 🔒 ED Browser — Şeffaflık & Gizlilik Raporu (`v4.4.0`)
+# 🔒 ED Browser — Şeffaflık & Gizlilik Raporu (`v4.4.1`)
 
 Bu belge **ED Browser** uygulamasının tam olarak hangi verileri topladığını, neleri **kesinlikle toplamadığını**, hangi gizlilik/VPN korumalarını sunduğunu ve kullandığı **Chromium (Edge WebView2)** motorunun sınırlarını şeffaf biçimde açıklar.
 

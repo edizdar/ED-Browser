@@ -54,6 +54,13 @@ internal static class Program
                 Environment.Exit(code);
                 return;
             }
+            if (args[i].Equals("--verify-live-vpn", StringComparison.OrdinalIgnoreCase))
+            {
+                string? outLog = (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal)) ? args[i + 1] : null;
+                int code = MainForm.VerifyLiveVpnEndToEnd(outLog);
+                Environment.Exit(code);
+                return;
+            }
             if (args[i].Equals("--render-ui-preview", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
             {
                 MainForm.RenderUiPreview(args[i + 1]);

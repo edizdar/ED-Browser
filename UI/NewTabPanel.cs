@@ -67,7 +67,7 @@ public sealed class NewTabPanel : Panel
 
         _subLabel = new Label
         {
-            Text = "Geliştirici: Erol Dizdar  •  Ultra Düşük RAM Sürümü (v4.4)",
+            Text = "Geliştirici: Erol Dizdar  •  Ultra Düşük RAM Sürümü (v4.4.1)",
             Font = new Font("Segoe UI", 9.5f),
             AutoSize = false,
             Size = new Size(680, 24),

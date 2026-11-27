@@ -504,6 +504,9 @@ public sealed class VpnPrivacyPopup : Form
 
     private void SelectFreeServer(FreeVpnServer srv, bool activateVpn)
     {
+        if (_cachedServers.Count > 0)
+            _ctx.VpnRouter.SetFreeFailoverPool(_cachedServers);
+
         _ctx.Settings.ActiveFreeServerUrl = srv.ProxyUrl;
         _ctx.Settings.ActiveFreeServerLabel = srv.DisplayText;
         _ctx.Settings.ActiveFreeServerCountry = srv.CountryCode;
@@ -521,7 +524,7 @@ public sealed class VpnPrivacyPopup : Form
         _scanBtn.Enabled = false;
         _scanBtn.Text = "Taranıyor…";
         _heroStatusLbl.ForeColor = _p.Accent;
-        _heroStatusLbl.Text = "Canlı ücretsiz VPN sunucuları doğrulanıyor…";
+        _heroStatusLbl.Text = "Canlı ücretsiz VPN sunucuları çoklu sitede doğrulanıyor…";
 
         try
         {
@@ -531,6 +534,7 @@ public sealed class VpnPrivacyPopup : Form
             if (found.Count > 0)
             {
                 _cachedServers = found;
+                _ctx.VpnRouter.SetFreeFailoverPool(found);
                 PopulateFreeServerCombo();
                 if (autoConnectFirst)
                     SelectFreeServer(found[0], activateVpn: true);
@@ -540,7 +544,7 @@ public sealed class VpnPrivacyPopup : Form
             else
             {
                 _heroStatusLbl.ForeColor = _p.Red;
-                _heroStatusLbl.Text = "Ücretsiz sunucu yanıt vermedi (WARP / Tor / Özel VPN deneyin)";
+                _heroStatusLbl.Text = "Tüm sitelere açılan ücretsiz sunucu bulunamadı (WARP / Tor önerilir)";
             }
         }
         finally

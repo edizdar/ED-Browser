@@ -112,7 +112,14 @@ public sealed class StorageService
             s.DohProvider = DohProvider.Cloudflare;
         s.UseCloudflareDoH = false;
         s.VpnProfiles ??= new List<VpnProfile>();
-        s.Version = "4.4.0";
+        // v4.4.0 could cache Cloudflare-only free relays (e.g. broken CZ node); reset once on upgrade to 4.4.1
+        if (s.Version == "4.4.0" && s.ProxyMode == ProxyMode.FreeCommunity)
+        {
+            s.ActiveFreeServerUrl = string.Empty;
+            s.ActiveFreeServerLabel = string.Empty;
+            s.ActiveFreeServerCountry = string.Empty;
+        }
+        s.Version = "4.4.1";
         s.AutoSleepMinutes = Math.Clamp(s.AutoSleepMinutes, 1, 120);
         s.DeepUnloadMinutes = Math.Clamp(s.DeepUnloadMinutes, 2, 240);
         s.RendererProcessLimit = Math.Clamp(s.RendererProcessLimit, 1, 8);
