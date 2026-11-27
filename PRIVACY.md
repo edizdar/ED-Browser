@@ -1,4 +1,4 @@
-# 🔒 ED Browser — Şeffaflık & Gizlilik Raporu (`v5.0.0`)
+# 🔒 ED Browser — Şeffaflık & Gizlilik Raporu (`v5.0.1`)
 
 Bu belge **ED Browser** uygulamasının tam olarak hangi verileri topladığını, neleri **kesinlikle toplamadığını**, hangi gizlilik/VPN korumalarını sunduğunu ve kullandığı **Chromium (Edge WebView2)** motorunun sınırlarını şeffaf biçimde açıklar.
 
@@ -19,7 +19,7 @@ Bu belge **ED Browser** uygulamasının tam olarak hangi verileri topladığın�
 
 ---
 
-## 3. Yerleşik Gizlilik Kalkanı Özellikleri (`v5.0.0`)
+## 3. Yerleşik Gizlilik Kalkanı Özellikleri (`v5.0.1`)
 | Koruma Katmanı | Ne Yapar? | Varsayılan Durum |
 | :--- | :--- | :--- |
 | **Reklam & İzleyici Engelleyici** | 150+ reklam, analitik ve telemetri alan adını sayfa yüklenmeden `204 Blocked` ile keser (`AdBlockerService`). | ✅ Açık |

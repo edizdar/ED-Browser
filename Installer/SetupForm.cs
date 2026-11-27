@@ -11,7 +11,7 @@ namespace EDBrowser.Setup;
 public sealed class SetupForm : Form
 {
     private const string AppName = "ED Browser";
-    private const string AppVersion = "5.0.0";
+    private const string AppVersion = "5.0.1";
     private const string UninstallKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\EDBrowser";
 
     [DllImport("dwmapi.dll")]
@@ -65,13 +65,27 @@ public sealed class SetupForm : Form
             e.Graphics.DrawLine(pen, 0, header.Height - 1, header.Width, header.Height - 1);
         };
 
-        var logo = new Panel { Location = new Point(22, 18), Size = new Size(56, 56), BackColor = Color.Transparent };
+        Image? logoPng = null;
+        try
+        {
+            using var ls = Assembly.GetExecutingAssembly().GetManifestResourceStream("edbrowser.png");
+            if (ls is not null) logoPng = Image.FromStream(ls);
+        }
+        catch { }
+
+        var logo = new Panel { Location = new Point(22, 16), Size = new Size(60, 60), BackColor = Color.Transparent };
         logo.Paint += (_, e) =>
         {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            if (logoPng is not null)
+            {
+                g.DrawImage(logoPng, new Rectangle(0, 0, 60, 60));
+                return;
+            }
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-            var r = new RectangleF(1, 1, 54, 54);
+            var r = new RectangleF(1, 1, 58, 58);
             using var path = RoundedRect(r, 14);
             using var br = new LinearGradientBrush(r, Color.FromArgb(16, 26, 54), Color.FromArgb(26, 36, 74), 45f);
             g.FillPath(br, path);

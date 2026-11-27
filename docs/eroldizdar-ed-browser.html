@@ -1,0 +1,278 @@
+<style>
+.edb-root{width:100%;max-width:100%;margin:0;padding:0}
+.edb-root,.edb-root *,.edb-root *:before,.edb-root *:after{box-sizing:border-box}
+.edb-wrap{width:100%;margin:0;padding:0}
+.edb-sec{padding:28px 0;border-bottom:1px solid #ddd6cc}
+.edb-sec:last-child{border-bottom:none;padding-bottom:0}
+.edb-brand{display:flex;align-items:center;gap:16px;margin:0 0 18px}
+.edb-logo{width:64px;height:64px;flex:0 0 64px;border:1px solid #d4cabc;border-radius:16px;overflow:hidden;background:#0c0c14}
+.edb-logo img{display:block;width:100%;height:100%;object-fit:cover;border:0}
+.edb-title{margin:0;font-size:2rem;line-height:1.15;font-weight:700;color:#111}
+.edb-sub{margin:6px 0 0;font-size:1rem;line-height:1.6;color:#5f5346}
+.edb-badge{display:inline-block;margin:0 0 16px;padding:6px 12px;border:1px solid #d4cabc;border-radius:999px;background:#f8f5f0;color:#5c5146;font-size:.84rem;line-height:1.4}
+.edb-h2{margin:0 0 14px;font-size:1.65rem;line-height:1.25;font-weight:700;color:#111}
+.edb-h3{margin:0 0 6px;font-size:1.12rem;line-height:1.35;font-weight:700;color:#111}
+.edb-t{margin:0 0 14px;font-size:1.02rem;line-height:1.75;color:#3e342b}
+.edb-t:last-child{margin-bottom:0}
+.edb-lead{font-size:1.08rem}
+.edb-quote{margin:18px 0 0;padding:18px;border-left:4px solid #c9bcae;background:#faf7f2;border-radius:0 16px 16px 0;color:#2e261f;line-height:1.75}
+.edb-btns{margin-top:18px}
+.edb-btn{display:block;width:100%;margin:0 0 12px;padding:14px 16px;text-align:center;text-decoration:none!important;border:1px solid #d4cabc;border-radius:14px;background:#f8f5f0;color:#111!important;font-weight:700;line-height:1.4}
+.edb-btn-primary{background:#111;color:#fff!important;border-color:#111}
+.edb-btn:last-child{margin-bottom:0}
+.edb-card{margin:0 0 14px;padding:18px;border:1px solid #d8cfc3;border-radius:18px;background:#faf7f2}
+.edb-card:last-child{margin-bottom:0}
+.edb-row{display:flex;align-items:flex-start;gap:12px;margin:0 0 8px}
+.edb-num{width:34px;height:34px;flex:0 0 34px;display:flex;align-items:center;justify-content:center;border:1px solid #d8cfc3;border-radius:10px;background:#fff;color:#111;font-size:.95rem;font-weight:700}
+.edb-small{font-size:.95rem;color:#64584d}
+.edb-spec{padding:14px 0;border-bottom:1px solid #e3dbd1}
+.edb-spec:last-child{border-bottom:none}
+.edb-spec-k{display:block;margin:0 0 4px;font-size:1rem;line-height:1.5;font-weight:700;color:#111}
+.edb-spec-v{display:block;font-size:1rem;line-height:1.7;color:#5b4f44}
+.edb-table-wrap{width:100%;overflow-x:auto;margin:14px 0;border:1px solid #d8cfc3;border-radius:16px;background:#faf7f2}
+.edb-table{width:100%;border-collapse:collapse;font-size:.96rem;line-height:1.55;color:#2e261f}
+.edb-table th,.edb-table td{padding:12px 14px;border-bottom:1px solid #e3dbd1;text-align:left;vertical-align:top}
+.edb-table th{background:#f3ede4;color:#111;font-weight:700}
+.edb-table tr:last-child td{border-bottom:none}
+.edb-gallery{display:grid;grid-template-columns:1fr;gap:16px;margin-top:14px}
+.edb-shot{margin:0;padding:12px;border:1px solid #d8cfc3;border-radius:16px;background:#faf7f2}
+.edb-shot img{display:block;width:100%;height:auto;border-radius:10px;border:1px solid #ddd6cc}
+.edb-shot-cap{margin:10px 2px 2px;font-size:.94rem;color:#5f5346;font-weight:600;text-align:center}
+@media (max-width:640px){
+  .edb-brand{align-items:flex-start}
+  .edb-title{font-size:1.65rem}
+  .edb-h2{font-size:1.4rem}
+  .edb-t,.edb-spec-v,.edb-table{font-size:.95rem}
+}
+</style>
+
+<div class="edb-root">
+  <div class="edb-wrap">
+
+    <div class="edb-sec">
+      <div class="edb-brand">
+        <div class="edb-logo">
+          <img alt="ED Browser Logo" loading="lazy" src="https://raw.githubusercontent.com/edizdar/ED-Browser/main/Assets/edbrowser.png" />
+        </div>
+        <div>
+          <div class="edb-title">ED Browser v5.0.1</div>
+          <div class="edb-sub">Ultra Düşük RAM · Sıfır Telemetri · Yeniden Başlatmasız Anlık VPN · Chromium (WebView2) Motoru</div>
+        </div>
+      </div>
+
+      <div class="edb-badge">v5.0.1 · WinForms GDI+ &amp; Chromium WebView2 · %95 Daha Küçük Boyut · Açık Kaynak (MIT)</div>
+
+      <div class="edb-h2">Hafiflik, tam gizlilik ve kontrol tek tarayıcıda birleşti.</div>
+
+      <div class="edb-t edb-lead">ED Browser, v3.1.8 Electron neslinden tamamen sıfırdan <strong>saf yerel WinForms GDI+ + Microsoft Edge WebView2 (Chromium)</strong> mimarisine geçirildi. Sonuç: 73 MB yerine yalnızca <strong>2,77 MB taşınabilir dosya</strong>, boşta gereksiz RAM tüketmeyen uyutma motoru ve modern tarayıcıların tüm profesyonel araçları.</div>
+
+      <div class="edb-t">Chromium WebView2 motoru sayesinde tüm modern web siteleri ve Chrome/Edge eklentileri sorunsuz çalışır; arayüz, güvenlik kalkanları, şifre kasası ve dahili VPN yönlendiricisi ise tamamen açık kaynaklıdır ve bilgisayarınız dışına tek bayt telemetri göndermez.</div>
+
+      <div class="edb-quote">"Her şey yüklü gelsin diye ağırlaşan tarayıcılar yerine; hızlı açılan, kullanılmayan sekmeleri 0 MB'a indiren ve tek tıkla VPN + gizlilik kalkanı sunan sade bir Windows tarayıcısı."</div>
+
+      <div class="edb-btns">
+        <a class="edb-btn edb-btn-primary" href="https://github.com/edizdar/ED-Browser/releases/download/v5.0.1/ED.Browser.Setup.5.0.1.exe" rel="nofollow" target="_blank">Kurulum Sürümünü İndir — ED.Browser.Setup.5.0.1.exe (~3,76 MB)</a>
+        <a class="edb-btn" href="https://github.com/edizdar/ED-Browser/releases/download/v5.0.1/ED.Browser.5.0.1.Portable.exe" rel="nofollow" target="_blank">Taşınabilir Sürümü İndir — ED.Browser.5.0.1.Portable.exe (~2,77 MB)</a>
+        <a class="edb-btn" href="https://github.com/edizdar/ED-Browser" rel="nofollow" target="_blank">GitHub Kaynak Kodu ve Sürüm Notları</a>
+        <a class="edb-btn" href="https://github.com/edizdar/ED-Browser/blob/main/PRIVACY.md" rel="nofollow" target="_blank">Gizlilik &amp; Şeffaflık Raporu (PRIVACY.md)</a>
+      </div>
+    </div>
+
+    <div class="edb-sec">
+      <div class="edb-h2">Ekran Görüntüleri (v5.0.1)</div>
+      <div class="edb-gallery">
+        <div class="edb-shot">
+          <img alt="ED Browser Ana Ekran" loading="lazy" src="https://raw.githubusercontent.com/edizdar/ED-Browser/main/docs/screenshots/main_dark.png" />
+          <div class="edb-shot-cap">Yeni "ED" Amblemi, VPN Rozeti, − %100 + Yakınlaştırma, Canlı RAM Göstergesi ve Sürükle-Bırak Yer İmleri</div>
+        </div>
+        <div class="edb-shot">
+          <img alt="ED Browser VPN ve Gizlilik Kalkanı" loading="lazy" src="https://raw.githubusercontent.com/edizdar/ED-Browser/main/docs/screenshots/vpn_privacy_popup.png" />
+          <div class="edb-shot-cap">Yeniden Başlatmasız Anlık VPN, Bölge Filtresi (EU/US/AS), Canlı Hız (KB/s) ve VPN Kill Switch</div>
+        </div>
+        <div class="edb-shot">
+          <img alt="ED Browser Bölünmüş Ekran" loading="lazy" src="https://raw.githubusercontent.com/edizdar/ED-Browser/main/docs/screenshots/split_view.png" />
+          <div class="edb-shot-cap">Bölünmüş Ekran (Ctrl+Shift+X) ile Tek Pencerede Yan Yana İki Web Sayfası</div>
+        </div>
+        <div class="edb-shot">
+          <img alt="ED Browser Dikey Sekmeler" loading="lazy" src="https://raw.githubusercontent.com/edizdar/ED-Browser/main/docs/screenshots/vertical_tabs.png" />
+          <div class="edb-shot-cap">Katlanabilir Dikey Sekmeler (Ctrl+Shift+V) ve Renkli Sekme Grupları</div>
+        </div>
+        <div class="edb-shot">
+          <img alt="ED Browser Görev Yöneticisi" loading="lazy" src="https://raw.githubusercontent.com/edizdar/ED-Browser/main/docs/screenshots/task_manager.png" />
+          <div class="edb-shot-cap">Yerleşik Tarayıcı Görev Yöneticisi (Shift+Esc) — Canlı RAM / CPU ve Tek Tıkla Sekme Uyutma</div>
+        </div>
+        <div class="edb-shot">
+          <img alt="ED Browser DevTools ve Kurulum" loading="lazy" src="https://raw.githubusercontent.com/edizdar/ED-Browser/main/docs/screenshots/devtools_docked.png" />
+          <div class="edb-shot-cap">Chrome Tarzı CDP Geliştirici Araçları (Öğeler, Konsol REPL, Ağ, Depo, Cihaz Emülasyonu)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="edb-sec">
+      <div class="edb-h2">Eski v3.1.8 ile Yeni v5.0.1 Karşılaştırması</div>
+      <div class="edb-table-wrap">
+        <table class="edb-table">
+          <thead>
+            <tr>
+              <th>Ölçüt</th>
+              <th>v3.1.8 (Electron)</th>
+              <th>v5.0.1 (WinForms + WebView2)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Taşınabilir .exe Boyutu</strong></td>
+              <td>72,67 MB</td>
+              <td><strong>~2,77 MB</strong> (%96,2 daha küçük)</td>
+            </tr>
+            <tr>
+              <td><strong>Kurulum .exe Boyutu</strong></td>
+              <td>73,00 MB</td>
+              <td><strong>~3,76 MB</strong> (%94,8 daha küçük)</td>
+            </tr>
+            <tr>
+              <td><strong>Arayüz Motoru</strong></td>
+              <td>Ekstra Chromium arayüz süreci</td>
+              <td>Saf yerel WinForms GDI+ (0 ekstra süreç)</td>
+            </tr>
+            <tr>
+              <td><strong>Bellek Yönetimi</strong></td>
+              <td>Temel JS zamanlayıcı kısma</td>
+              <td>Otomatik Uyutma (TrySuspend) + 0 MB Derin Boşaltma + Görev Yöneticisi</td>
+            </tr>
+            <tr>
+              <td><strong>VPN &amp; Gizlilik</strong></td>
+              <td>Temel proxy</td>
+              <td>Yeniden Başlatmasız LocalVpnRouter + Bölge Filtresi + Kill Switch + WARP/Tor + Multi-DoH</td>
+            </tr>
+            <tr>
+              <td><strong>Eklenti Desteği</strong></td>
+              <td>Yok</td>
+              <td>Chrome Web Store + Microsoft Edge Add-ons + .crx/.zip + Toolbar Popup</td>
+            </tr>
+            <tr>
+              <td><strong>Şifre Kasası</strong></td>
+              <td>Sabit anahtarlı AES-256-CBC</td>
+              <td>AES-256-GCM + Windows DPAPI (kullanıcıya özel anahtar)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="edb-sec">
+      <div class="edb-h2">v5.0.1 Öne Çıkan Özellikler</div>
+
+      <div class="edb-card">
+        <div class="edb-row"><div class="edb-num">1</div><div class="edb-h3">Tek Tıkla Anlık VPN, Bölge Filtresi &amp; Kill Switch</div></div>
+        <div class="edb-t">Adres çubuğundaki <strong>VPN</strong> rozetinden tarayıcıyı yeniden başlatmadan VPN'i açıp kapatabilirsiniz. Dahili <strong>Sunucu Bul</strong> tarayıcısı herkese açık röleleri hem <code>google.com</code> hem <code>cloudflare.com</code> üzerinden canlı test eder, bozuk düğümleri otomatik atlar (failover), canlı hızı (<code>↓ / ↑ KB/s</code>) gösterir ve <strong>Kill Switch</strong> ile tünel düşerse gerçek IP sızmasını keser. Cloudflare WARP ve Tor tünelleri de tek tıkla algılanır.</div>
+      </div>
+
+      <div class="edb-card">
+        <div class="edb-row"><div class="edb-num">2</div><div class="edb-h3">Dinamik Reklam Engelleyici, Kozmetik CSS &amp; Site İstisnaları</div></div>
+        <div class="edb-t">Yerleşik 150+ reklam/izleyici ağına ek olarak Ayarlar'dan <strong>Peter Lowe / EasyList</strong> kurallarını güncelleyebilir, boş reklam kutularını CSS ile gizleyebilir ve adres çubuğu kilit ikonundan sadece istediğiniz sitelerde reklam engelleyiciyi veya HTTPS-Only'yi duraklatabilirsiniz.</div>
+      </div>
+
+      <div class="edb-card">
+        <div class="edb-row"><div class="edb-num">3</div><div class="edb-h3">Oturum Kurtarma, Dikey Sekmeler &amp; Renkli Sekme Grupları</div></div>
+        <div class="edb-t">Tarayıcı açıldığında son sekmeler pasif <code>0 MB</code> bellek modunda geri yüklenir. Dilerseniz <code>Ctrl+Shift+V</code> ile sol kenarda katlanabilir dikey sekme listesine geçebilir, sekmeleri <em>İş, Araştırma, Alışveriş</em> gibi renkli gruplara ayırabilirsiniz.</div>
+      </div>
+
+      <div class="edb-card">
+        <div class="edb-row"><div class="edb-num">4</div><div class="edb-h3">Bölünmüş Ekran (Split View — Ctrl+Shift+X)</div></div>
+        <div class="edb-t">Tek pencerede iki web sayfasını yan yana açabilir, bağımsız adres girebilir ve tek tıkla sağ/sol sayfaları yer değiştirebilirsiniz.</div>
+      </div>
+
+      <div class="edb-card">
+        <div class="edb-row"><div class="edb-num">5</div><div class="edb-h3">Canlı Omnibox Otomatik Tamamlama</div></div>
+        <div class="edb-t">Adres çubuğuna yazarken yer imleriniz, ziyaret geçmişiniz ve canlı web arama önerileri odak çalmayan şık bir listede birleştirilir.</div>
+      </div>
+
+      <div class="edb-card">
+        <div class="edb-row"><div class="edb-num">6</div><div class="edb-h3">Okuyucu Modu, Medya Merkezi &amp; Resim İçinde Resim (PiP)</div></div>
+        <div class="edb-t"><code>Ctrl+Alt+R</code> ile makale sayfalarını reklamsız okuma görünümüne geçirin (<code>A- / A+</code> yazı boyutu). Üst çubuktaki medya merkezinden arka plan sekmesindeki videoyu duraklatın, sesini kapatın veya yüzen PiP penceresine alın.</div>
+      </div>
+
+      <div class="edb-card">
+        <div class="edb-row"><div class="edb-num">7</div><div class="edb-h3">Chrome Web Store &amp; Edge Add-ons Eklenti Mağazası</div></div>
+        <div class="edb-t"><code>Ctrl+Shift+E</code> veya mağaza sayfasındayken açılan tek tık <strong>"ED Browser'a Ekle"</strong> çubuğuyla CRX3/ZIP uzantıları kurabilir, etkin eklentilerin popup pencerelerini doğrudan araç çubuğundan açabilirsiniz.</div>
+      </div>
+
+      <div class="edb-card">
+        <div class="edb-row"><div class="edb-num">8</div><div class="edb-h3">Gerçek Chrome Tarzı CDP Geliştirici Araçları (F12)</div></div>
+        <div class="edb-t">Sağa veya alta sabitlenebilen gerçek CDP paneli: Öğeler (canlı CSS editörü), Konsol + JS REPL, Ağ inceleme, Depo (Çerez/LocalStorage), Kaynak kod, Sayfadan Öğe Seçici (<code>Ctrl+Shift+C</code>) ve Mobil Cihaz Emülasyonu.</div>
+      </div>
+
+      <div class="edb-card">
+        <div class="edb-row"><div class="edb-num">9</div><div class="edb-h3">Çoklu Kullanıcı Profilleri &amp; Site Favicon Önbelleği</div></div>
+        <div class="edb-t">Sağ üstteki profil simgesinden tamamen ayrı çerez, yer imi, şifre ve eklentilere sahip "İş", "Kişisel" veya "Test" profilleri oluşturup aynı anda çalıştırabilirsiniz.</div>
+      </div>
+
+      <div class="edb-card">
+        <div class="edb-row"><div class="edb-num">10</div><div class="edb-h3">Görev Yöneticisi (Shift+Esc) &amp; Otomatik Güncelleyici</div></div>
+        <div class="edb-t">Hangi sekmenin veya WebView2 sürecinin ne kadar RAM/CPU kullandığını canlı görün, tek tıkla uyutun veya 0 MB'a boşaltın. Yeni sürüm yayınlandığında uygulama içinden tek tıkla otomatik indirip güncelleyin.</div>
+      </div>
+
+      <div class="edb-card">
+        <div class="edb-row"><div class="edb-num">11</div><div class="edb-h3">AES-256-GCM + Windows DPAPI Şifre Kasası &amp; İçe Aktarım</div></div>
+        <div class="edb-t">Kayıtlı parolalar bilgisayarınıza ve Windows kullanıcınıza özel DPAPI anahtarıyla şifrelenir; Chrome, Edge ve Firefox yer imi/şifrelerini tek adımda aktarabilirsiniz.</div>
+      </div>
+
+      <div class="edb-card">
+        <div class="edb-row"><div class="edb-num">12</div><div class="edb-h3">Sürükle-Bırak Yer İmleri, Yakınlaştırma &amp; Ekran Görüntüsü</div></div>
+        <div class="edb-t">Yer imi çubuğunda doğrudan fare yakalamalı sürükle-bırak ile sıralama ve klasör içine taşıma, adres çubuğu yanında canlı <code>− %100 +</code> yakınlaştırma, tam sayfa/alan seçmeli PNG ekran görüntüsü ve tek tık PDF dışa aktarma.</div>
+      </div>
+    </div>
+
+    <div class="edb-sec">
+      <div class="edb-h2">Faydalı Klavye Kısayolları</div>
+      <div class="edb-table-wrap">
+        <table class="edb-table">
+          <thead>
+            <tr>
+              <th>Kısayol</th>
+              <th>İşlev</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>Ctrl+T</code> / <code>Ctrl+W</code> / <code>Ctrl+Shift+T</code></td><td>Yeni sekme · Sekmeyi kapat · Kapalı sekmeyi geri aç</td></tr>
+            <tr><td><code>Ctrl+Shift+V</code> / <code>Ctrl+Shift+X</code></td><td>Dikey Sekmeler · Bölünmüş Ekran (Split View)</td></tr>
+            <tr><td><code>Ctrl+Alt+R</code></td><td>Okuyucu Modu (Reader View)</td></tr>
+            <tr><td><code>Shift+Esc</code></td><td>Tarayıcı Görev Yöneticisi (RAM / CPU)</td></tr>
+            <tr><td><code>Ctrl+Shift+E</code> / <code>Ctrl+Shift+L</code></td><td>Eklentiler · Sol Hızlı Erişim Çubuğu</td></tr>
+            <tr><td><code>F12</code> / <code>Ctrl+Shift+C</code></td><td>Geliştirici Araçları (DevTools) · Sayfadan Öğe Seçici</td></tr>
+            <tr><td><code>Ctrl+Shift+S</code> / <code>Ctrl+Shift+Del</code></td><td>Ekran Görüntüsü · Tarama Verilerini Temizle</td></tr>
+            <tr><td><code>F11</code> / <code>Ctrl+Shift+P</code></td><td>Tam Ekran · Gizli Pencere</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="edb-sec">
+      <div class="edb-h2">Teknik Yapı</div>
+      <div class="edb-spec">
+        <span class="edb-spec-k">Arayüz &amp; Tarayıcı Motoru</span>
+        <span class="edb-spec-v">Yerel WinForms GDI+ (.NET 10) + Microsoft Edge WebView2 (Chromium)</span>
+      </div>
+      <div class="edb-spec">
+        <span class="edb-spec-k">Güncel Sürüm</span>
+        <span class="edb-spec-v">v5.0.1 (Kurulum &amp; Taşınabilir Sürüm + Windows 11 Çoklu Çözünürlüklü Simge)</span>
+      </div>
+      <div class="edb-spec">
+        <span class="edb-spec-k">Gizlilik Politikası</span>
+        <span class="edb-spec-v">Sıfır telemetri, AES-256-GCM + DPAPI yerel şifre kasası, DoH + WebRTC sızıntı önleme + Kill Switch</span>
+      </div>
+      <div class="edb-spec">
+        <span class="edb-spec-k">Lisans &amp; Kaynak Kod</span>
+        <span class="edb-spec-v">MIT Açık Kaynak Lisansı — <a href="https://github.com/edizdar/ED-Browser" rel="nofollow" target="_blank">github.com/edizdar/ED-Browser</a></span>
+      </div>
+    </div>
+
+    <div class="edb-sec">
+      <div class="edb-h2">Sonuç</div>
+      <div class="edb-t">ED Browser v5.0.1, günlük kullanımda hız ve gizlilikten ödün vermeden modern Chromium özelliklerini (eklentiler, bölünmüş ekran, dikey sekmeler, okuyucu modu ve yeniden başlatmasız anlık VPN) hafif bir masaüstü paketinde toplar.</div>
+      <div class="edb-t edb-small">Bu sayfa Blogger uyumu için tamamen <code>.edb-*</code> önekli izole CSS sınıflarıyla hazırlanmıştır.</div>
+    </div>
+
+  </div>
+</div>

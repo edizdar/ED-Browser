@@ -143,7 +143,7 @@ public sealed class StorageService
             s.ActiveFreeServerLabel = string.Empty;
             s.ActiveFreeServerCountry = string.Empty;
         }
-        s.Version = "5.0.0";
+        s.Version = "5.0.1";
         s.AutoSleepMinutes = Math.Clamp(s.AutoSleepMinutes, 1, 120);
         s.DeepUnloadMinutes = Math.Clamp(s.DeepUnloadMinutes, 2, 240);
         s.RendererProcessLimit = Math.Clamp(s.RendererProcessLimit, 1, 8);

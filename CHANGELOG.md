@@ -2,6 +2,14 @@
 
 ---
 
+## v5.0.1 — Yenilenen Çoklu Çözünürlüklü Uygulama Simgesi, Arayüz Amblemi & Tam Web/GitHub Dokümantasyonu
+- 🎨 **Yeni Uygulama İkonu (`Assets/edbrowser.ico` & `Assets/edbrowser.png`):**
+  - `v3.1.8` sürümündeki 3B metalik mavi-gümüş **"ED"** küre amblemi modern Windows 11 tasarım diliyle yeniden işlendi; 16 px'ten 256 px'e kadar 7 katmanlı hibrit DIB+PNG `.ico` paketi oluşturuldu.
+  - Yeni logo Yeni Sekme sayfasına, Kurulum Sihirbazına ve uygulama pencere başlık çubuğuna doğrudan gömüldü.
+- 📄 **Dokümantasyon & Web Sayfası Güncellemesi:** GitHub repo açıklaması/etiketleri, [README.md](README.md), [PRIVACY.md](PRIVACY.md) ve `eroldizdar.tr/p/ed-browser.html` için Blogger uyumlu HTML paketi (`docs/eroldizdar-ed-browser.html`) güncellendi.
+
+---
+
 ## v5.0.0 — Tüm 14 Yeni Nesil Özellik Sürümü
 - 🧩 **Üretkenlik & Sekme Yönetimi:**
   - **Oturum Kurtarma (`RestoreSessionOnStartup`):** Kapanıp açıldığında son sekmeleri, sabitli sekmeleri ve grupları pasif `0 MB` bellek modunda geri getirir.

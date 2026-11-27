@@ -50,7 +50,7 @@ public sealed class SavedSession
 
 public sealed class BrowserSettings
 {
-    public string Version { get; set; } = "5.0.0";
+    public string Version { get; set; } = "5.0.1";
     public string HomePage { get; set; } = "https://www.google.com";
     public string SearchEngine { get; set; } = "https://www.google.com/search?q=";
     public BrowserTheme Theme { get; set; } = BrowserTheme.Dark;

@@ -38,13 +38,20 @@ public sealed class NewTabPanel : Panel
             BackColor = Color.Transparent
         };
 
-        var emblem = new Panel { Size = new Size(64, 64), Location = new Point(308, 4), BackColor = Color.Transparent };
+        var emblemImg = LoadEmbeddedLogo();
+        var emblem = new Panel { Size = new Size(72, 72), Location = new Point(304, 2), BackColor = Color.Transparent };
         emblem.Paint += (_, e) =>
         {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            if (emblemImg is not null)
+            {
+                g.DrawImage(emblemImg, new Rectangle(2, 2, 68, 68));
+                return;
+            }
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-            var r = new RectangleF(2, 2, 60, 60);
+            var r = new RectangleF(2, 2, 68, 68);
             using var gp = GraphicsExt.CreateRoundedRect(r, 16);
             using var bg = new LinearGradientBrush(r, Color.FromArgb(18, 28, 56), Color.FromArgb(26, 36, 74), 45f);
             g.FillPath(bg, gp);
@@ -62,13 +69,13 @@ public sealed class NewTabPanel : Panel
             AutoSize = false,
             Size = new Size(680, 42),
             TextAlign = ContentAlignment.MiddleCenter,
-            Location = new Point(0, 74),
+            Location = new Point(0, 76),
             BackColor = Color.Transparent
         };
 
         _subLabel = new Label
         {
-            Text = "Geliştirici: Erol Dizdar  •  Ultra Düşük RAM Sürümü (v5.0)",
+            Text = "Geliştirici: Erol Dizdar  •  Ultra Düşük RAM Sürümü (v5.0.1)",
             Font = new Font("Segoe UI", 9.5f),
             AutoSize = false,
             Size = new Size(680, 24),
@@ -367,6 +374,28 @@ public sealed class NewTabPanel : Panel
         card.Controls.Add(plusBox);
         card.Controls.Add(lbl);
         return card;
+    }
+
+    private static Image? _cachedLogo;
+    private static Image? LoadEmbeddedLogo()
+    {
+        if (_cachedLogo is not null) return _cachedLogo;
+        try
+        {
+            var asm = typeof(NewTabPanel).Assembly;
+            var name = asm.GetManifestResourceNames().FirstOrDefault(n => n.EndsWith("edbrowser.png", StringComparison.OrdinalIgnoreCase));
+            if (name is not null)
+            {
+                using var s = asm.GetManifestResourceStream(name);
+                if (s is not null)
+                {
+                    _cachedLogo = Image.FromStream(s);
+                    return _cachedLogo;
+                }
+            }
+        }
+        catch { }
+        return null;
     }
 
     private static Color ParseColorOrDefault(string hex, Color fallback)
