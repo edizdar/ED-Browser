@@ -18,6 +18,9 @@ public sealed class BrowserTab : IDisposable
     public DateTime LastActiveUtc { get; set; } = DateTime.UtcNow;
     public int BlockedOnTab { get; private set; }
     public double ZoomFactor { get; set; } = 1.0;
+    public bool IsPinned { get; set; }
+    public bool IsMuted => WebView?.CoreWebView2?.IsMuted ?? false;
+    public bool IsPlayingAudio => WebView?.CoreWebView2?.IsDocumentPlayingAudio ?? false;
     public bool CanGoBack => WebView?.CoreWebView2?.CanGoBack ?? false;
     public bool CanGoForward => WebView?.CoreWebView2?.CanGoForward ?? false;
 
@@ -43,6 +46,10 @@ public sealed class BrowserTab : IDisposable
     public event Action<Keys>? AcceleratorForwarded;
     public event Action? FindRequested;
     public event Action? BookmarkRequested;
+    public event Action<BrowserTab, double>? ZoomChanged;
+    public event Action<int, int>? InspectRequested;
+    public event Action? ViewSourceRequested;
+    public event Action<string>? DevToolsElementPicked;
 
     public BrowserTab(
         BrowserContext ctx,
@@ -132,7 +139,7 @@ public sealed class BrowserTab : IDisposable
 
             var core = wv.CoreWebView2;
             core.Settings.AreDefaultContextMenusEnabled = true;
-            core.Settings.AreDevToolsEnabled = true;
+            core.Settings.AreDevToolsEnabled = false;
             core.Settings.IsStatusBarEnabled = false;
             core.Settings.IsBuiltInErrorPageEnabled = true;
             core.Settings.IsPasswordAutosaveEnabled = false;
@@ -148,6 +155,13 @@ public sealed class BrowserTab : IDisposable
             core.DownloadStarting += OnDownloadStarting;
             core.ContextMenuRequested += OnContextMenuRequested;
             core.WebMessageReceived += OnWebMessageReceived;
+            core.IsDocumentPlayingAudioChanged += (_, _) => StateChanged?.Invoke(this);
+            core.IsMutedChanged += (_, _) => StateChanged?.Invoke(this);
+            wv.ZoomFactorChanged += (_, _) =>
+            {
+                ZoomFactor = wv.ZoomFactor;
+                ZoomChanged?.Invoke(this, ZoomFactor);
+            };
             wv.KeyDown += OnWebViewKeyDown;
 
             // Inject lightweight form submit listener for password save prompt
@@ -176,6 +190,9 @@ public sealed class BrowserTab : IDisposable
 
             IsInitialized = true;
             wv.ZoomFactor = ZoomFactor;
+
+            if (!_incognito)
+                _ = _ctx.Extensions.SyncWithProfileAsync(core.Profile);
 
             if (!string.IsNullOrEmpty(_pendingUrl))
             {
@@ -389,6 +406,17 @@ public sealed class BrowserTab : IDisposable
         var bmItem = env.CreateContextMenuItem("🔖 Yer İmine Ekle (Ctrl+D)", null, CoreWebView2ContextMenuItemKind.Command);
         bmItem.CustomItemSelected += (_, _) => BookmarkRequested?.Invoke();
         e.MenuItems.Add(bmItem);
+
+        e.MenuItems.Add(env.CreateContextMenuItem("", null, CoreWebView2ContextMenuItemKind.Separator));
+
+        var viewSrcItem = env.CreateContextMenuItem("📄 Sayfa Kaynağını Görüntüle (Ctrl+U)", null, CoreWebView2ContextMenuItemKind.Command);
+        viewSrcItem.CustomItemSelected += (_, _) => ViewSourceRequested?.Invoke();
+        e.MenuItems.Add(viewSrcItem);
+
+        var loc = e.Location;
+        var inspectItem = env.CreateContextMenuItem("🛠️ İncele (Geliştirici Araçları)", null, CoreWebView2ContextMenuItemKind.Command);
+        inspectItem.CustomItemSelected += (_, _) => InspectRequested?.Invoke(loc.X, loc.Y);
+        e.MenuItems.Add(inspectItem);
     }
 
     private async Task DownloadDirectFileAsync(string url)
@@ -428,13 +456,23 @@ public sealed class BrowserTab : IDisposable
 
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
-        if (_incognito) return;
         try
         {
             var json = e.TryGetWebMessageAsString();
             if (string.IsNullOrWhiteSpace(json)) return;
             using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("type", out var tp) && tp.GetString() == "ed-pw-submit")
+            if (!doc.RootElement.TryGetProperty("type", out var tp)) return;
+            var msgType = tp.GetString();
+
+            if (msgType == "ed-devtools-pick")
+            {
+                DevToolsElementPicked?.Invoke(json);
+                return;
+            }
+
+            if (_incognito) return;
+
+            if (msgType == "ed-pw-submit")
             {
                 var url = doc.RootElement.GetProperty("url").GetString() ?? "";
                 var user = doc.RootElement.GetProperty("username").GetString() ?? "";
@@ -462,9 +500,10 @@ public sealed class BrowserTab : IDisposable
 
         bool shouldForward = key is Keys.F5 or Keys.F11 or Keys.F12 or Keys.Escape ||
             (mods == Keys.Control && key is Keys.T or Keys.W or Keys.L or Keys.R or Keys.D or Keys.F or Keys.P
+                or Keys.N or Keys.H or Keys.S or Keys.U or Keys.Oemcomma
                 or Keys.Oemplus or Keys.Add or Keys.OemMinus or Keys.Subtract or Keys.D0 or Keys.NumPad0
                 or >= Keys.D1 and <= Keys.D9) ||
-            (mods == (Keys.Control | Keys.Shift) && key is Keys.P or Keys.B or Keys.J or Keys.S or Keys.I) ||
+            (mods == (Keys.Control | Keys.Shift) && key is Keys.P or Keys.B or Keys.J or Keys.S or Keys.I or Keys.T or Keys.O or Keys.C or Keys.E or Keys.L or Keys.Delete) ||
             (mods == Keys.Alt && key is Keys.Left or Keys.Right);
 
         if (shouldForward)
@@ -564,14 +603,44 @@ public sealed class BrowserTab : IDisposable
         ZoomFactor = Math.Clamp(factor, 0.25, 3.0);
         if (WebView is not null)
             WebView.ZoomFactor = ZoomFactor;
+        ZoomChanged?.Invoke(this, ZoomFactor);
+    }
+
+    public void ToggleMute()
+    {
+        if (WebView?.CoreWebView2 is null) return;
+        WebView.CoreWebView2.IsMuted = !WebView.CoreWebView2.IsMuted;
+        StateChanged?.Invoke(this);
     }
 
     public void OpenDevTools() => WebView?.CoreWebView2?.OpenDevToolsWindow();
 
+    public async Task SavePageAsAsync()
+    {
+        if (WebView?.CoreWebView2 is null) return;
+        try { await WebView.CoreWebView2.ShowSaveAsUIAsync(); }
+        catch { }
+    }
+
     public void PrintPage()
     {
-        if (WebView?.CoreWebView2 is not null)
-            _ = WebView.CoreWebView2.ExecuteScriptAsync("window.print()");
+        if (WebView?.CoreWebView2 is null) return;
+        try { WebView.CoreWebView2.ShowPrintUI(); }
+        catch { _ = WebView.CoreWebView2.ExecuteScriptAsync("window.print()"); }
+    }
+
+    public async Task<bool> PrintToPdfAsync(string filePath)
+    {
+        if (WebView?.CoreWebView2 is null) return false;
+        try { return await WebView.CoreWebView2.PrintToPdfAsync(filePath); }
+        catch { return false; }
+    }
+
+    public async Task ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds kinds)
+    {
+        if (WebView?.CoreWebView2 is null) return;
+        try { await WebView.CoreWebView2.Profile.ClearBrowsingDataAsync(kinds); }
+        catch { }
     }
 
     public async Task<bool> HasPasswordInputAsync()

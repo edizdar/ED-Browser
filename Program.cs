@@ -19,11 +19,45 @@ internal static class Program
         Application.SetCompatibleTextRenderingDefault(false);
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
 
-        for (int i = 0; i < args.Length - 1; i++)
+        string? diagLog = null;
+        for (int i = 0; i < args.Length; i++)
         {
-            if (args[i].Equals("--render-ui-preview", StringComparison.OrdinalIgnoreCase))
+            if (args[i].Equals("--self-test", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
+                diagLog = args[i + 1];
+            else if (args[i].Equals("--render-ui-preview", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                diagLog = Path.Combine(args[i + 1], "preview-error.log");
+        }
+
+        Application.ThreadException += (_, exArgs) =>
+        {
+            if (!string.IsNullOrEmpty(diagLog))
+            {
+                try { File.AppendAllText(diagLog, $"[EXCEPTION] ThreadException: {exArgs.Exception}\n"); } catch { }
+                Environment.Exit(2);
+            }
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, exArgs) =>
+        {
+            if (!string.IsNullOrEmpty(diagLog))
+            {
+                try { File.AppendAllText(diagLog, $"[EXCEPTION] Unhandled: {exArgs.ExceptionObject}\n"); } catch { }
+                Environment.Exit(3);
+            }
+        };
+
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (args[i].Equals("--self-test", StringComparison.OrdinalIgnoreCase))
+            {
+                string? outLog = (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal)) ? args[i + 1] : null;
+                int code = MainForm.RunSelfTests(outLog);
+                Environment.Exit(code);
+                return;
+            }
+            if (args[i].Equals("--render-ui-preview", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
             {
                 MainForm.RenderUiPreview(args[i + 1]);
+                Environment.Exit(0);
                 return;
             }
         }

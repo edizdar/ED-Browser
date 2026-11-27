@@ -39,7 +39,32 @@ public enum VectorIcon
     ZoomOut,
     Sliders,
     Info,
-    ArrowRight
+    ArrowRight,
+    NewWindow,
+    Undo,
+    Pin,
+    VolumeOn,
+    VolumeOff,
+    Printer,
+    Save,
+    FilePdf,
+    Trash,
+    Sun,
+    Moon,
+    RefreshUpdate,
+    DockRight,
+    DockBottom,
+    ExternalWindow,
+    InspectCursor,
+    DeviceMobile,
+    Terminal,
+    Network,
+    Database,
+    Exit,
+    ChevronRight,
+    Minus,
+    Puzzle,
+    Sidebar
 }
 
 public static class GraphicsExt
@@ -434,6 +459,274 @@ public static class IconPainter
                 g.FillEllipse(brush, cx - 0.9f * u, cy - 3.4f * u, 1.8f * u, 1.8f * u);
                 g.DrawLine(pen, cx, cy - 0.5f * u, cx, cy + 3.2f * u);
                 break;
+
+            case VectorIcon.Minus:
+                g.DrawLine(pen, cx - 4.2f * u, cy, cx + 4.2f * u, cy);
+                break;
+
+            case VectorIcon.ChevronRight:
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(cx - 2f * u, cy - 4f * u),
+                    new PointF(cx + 2.5f * u, cy),
+                    new PointF(cx - 2f * u, cy + 4f * u)
+                });
+                break;
+
+            case VectorIcon.NewWindow:
+                using (var gp = GraphicsExt.CreateRoundedRect(new RectangleF(cx - 5f * u, cy - 4.5f * u, 10f * u, 9f * u), 1.5f * u))
+                    g.DrawPath(pen, gp);
+                g.DrawLine(pen, cx - 5f * u, cy - 1.8f * u, cx + 5f * u, cy - 1.8f * u);
+                g.DrawLine(pen, cx, cy - 0.2f * u, cx, cy + 3.2f * u);
+                g.DrawLine(pen, cx - 1.7f * u, cy + 1.5f * u, cx + 1.7f * u, cy + 1.5f * u);
+                break;
+
+            case VectorIcon.Undo:
+                g.DrawArc(pen, cx - 4.5f * u, cy - 3.2f * u, 9f * u, 8f * u, -170, 220);
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(cx - 5.2f * u, cy - 3.8f * u),
+                    new PointF(cx - 4.6f * u, cy - 0.5f * u),
+                    new PointF(cx - 1.5f * u, cy - 1.2f * u)
+                });
+                break;
+
+            case VectorIcon.Pin:
+                g.DrawLine(pen, cx - 3f * u, cy - 4.8f * u, cx + 3f * u, cy - 4.8f * u);
+                g.DrawLine(pen, cx - 2.2f * u, cy - 4.8f * u, cx - 2.8f * u, cy + 0.5f * u);
+                g.DrawLine(pen, cx + 2.2f * u, cy - 4.8f * u, cx + 2.8f * u, cy + 0.5f * u);
+                g.DrawLine(pen, cx - 4.5f * u, cy + 0.5f * u, cx + 4.5f * u, cy + 0.5f * u);
+                g.DrawLine(pen, cx, cy + 0.5f * u, cx, cy + 5.2f * u);
+                break;
+
+            case VectorIcon.VolumeOn:
+                g.DrawPolygon(pen, new[]
+                {
+                    new PointF(cx - 5.2f * u, cy - 2f * u),
+                    new PointF(cx - 2.5f * u, cy - 2f * u),
+                    new PointF(cx + 0.6f * u, cy - 4.8f * u),
+                    new PointF(cx + 0.6f * u, cy + 4.8f * u),
+                    new PointF(cx - 2.5f * u, cy + 2f * u),
+                    new PointF(cx - 5.2f * u, cy + 2f * u)
+                });
+                g.DrawArc(pen, cx + 0.8f * u, cy - 2.8f * u, 3.2f * u, 5.6f * u, -65, 130);
+                g.DrawArc(pen, cx + 1.2f * u, cy - 4.8f * u, 4.8f * u, 9.6f * u, -65, 130);
+                break;
+
+            case VectorIcon.VolumeOff:
+                g.DrawPolygon(pen, new[]
+                {
+                    new PointF(cx - 5.2f * u, cy - 2f * u),
+                    new PointF(cx - 2.5f * u, cy - 2f * u),
+                    new PointF(cx + 0.4f * u, cy - 4.6f * u),
+                    new PointF(cx + 0.4f * u, cy + 4.6f * u),
+                    new PointF(cx - 2.5f * u, cy + 2f * u),
+                    new PointF(cx - 5.2f * u, cy + 2f * u)
+                });
+                g.DrawLine(pen, cx + 2.2f * u, cy - 2.2f * u, cx + 5.4f * u, cy + 2.2f * u);
+                g.DrawLine(pen, cx + 5.4f * u, cy - 2.2f * u, cx + 2.2f * u, cy + 2.2f * u);
+                break;
+
+            case VectorIcon.Printer:
+                g.DrawRectangle(pen, cx - 3.2f * u, cy - 5.2f * u, 6.4f * u, 2.8f * u);
+                using (var gp = GraphicsExt.CreateRoundedRect(new RectangleF(cx - 5.2f * u, cy - 2.4f * u, 10.4f * u, 5.2f * u), 1.3f * u))
+                    g.DrawPath(pen, gp);
+                g.DrawRectangle(pen, cx - 3.2f * u, cy + 1.2f * u, 6.4f * u, 4f * u);
+                break;
+
+            case VectorIcon.Save:
+                using (var gp = GraphicsExt.CreateRoundedRect(new RectangleF(cx - 4.8f * u, cy - 4.8f * u, 9.6f * u, 9.6f * u), 1.2f * u))
+                    g.DrawPath(pen, gp);
+                g.DrawRectangle(pen, cx - 2.6f * u, cy - 4.8f * u, 4.6f * u, 3.2f * u);
+                g.DrawRectangle(pen, cx - 3f * u, cy + 0.6f * u, 6f * u, 4.2f * u);
+                break;
+
+            case VectorIcon.FilePdf:
+                g.DrawPolygon(pen, new[]
+                {
+                    new PointF(cx - 4f * u, cy - 5.4f * u),
+                    new PointF(cx + 1.6f * u, cy - 5.4f * u),
+                    new PointF(cx + 4f * u, cy - 3f * u),
+                    new PointF(cx + 4f * u, cy + 5.4f * u),
+                    new PointF(cx - 4f * u, cy + 5.4f * u)
+                });
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(cx + 1.6f * u, cy - 5.4f * u),
+                    new PointF(cx + 1.6f * u, cy - 3f * u),
+                    new PointF(cx + 4f * u, cy - 3f * u)
+                });
+                g.DrawLine(pen, cx - 2.2f * u, cy + 0.4f * u, cx + 2.2f * u, cy + 0.4f * u);
+                g.DrawLine(pen, cx - 2.2f * u, cy + 2.8f * u, cx + 1.4f * u, cy + 2.8f * u);
+                break;
+
+            case VectorIcon.Trash:
+                g.DrawLine(pen, cx - 4.8f * u, cy - 3.2f * u, cx + 4.8f * u, cy - 3.2f * u);
+                g.DrawLine(pen, cx - 2f * u, cy - 5f * u, cx + 2f * u, cy - 5f * u);
+                g.DrawLine(pen, cx - 2f * u, cy - 5f * u, cx - 2f * u, cy - 3.2f * u);
+                g.DrawLine(pen, cx + 2f * u, cy - 5f * u, cx + 2f * u, cy - 3.2f * u);
+                g.DrawPolygon(pen, new[]
+                {
+                    new PointF(cx - 3.8f * u, cy - 3.2f * u),
+                    new PointF(cx + 3.8f * u, cy - 3.2f * u),
+                    new PointF(cx + 3f * u, cy + 5.2f * u),
+                    new PointF(cx - 3f * u, cy + 5.2f * u)
+                });
+                g.DrawLine(pen, cx - 1.2f * u, cy - 1f * u, cx - 1f * u, cy + 3.2f * u);
+                g.DrawLine(pen, cx + 1.2f * u, cy - 1f * u, cx + 1f * u, cy + 3.2f * u);
+                break;
+
+            case VectorIcon.Sun:
+                g.DrawEllipse(pen, cx - 2.6f * u, cy - 2.6f * u, 5.2f * u, 5.2f * u);
+                for (int i = 0; i < 8; i++)
+                {
+                    double ang = i * Math.PI / 4.0;
+                    g.DrawLine(pen,
+                        cx + (float)(Math.Cos(ang) * 4.1f * u),
+                        cy + (float)(Math.Sin(ang) * 4.1f * u),
+                        cx + (float)(Math.Cos(ang) * 5.6f * u),
+                        cy + (float)(Math.Sin(ang) * 5.6f * u));
+                }
+                break;
+
+            case VectorIcon.Moon:
+                g.DrawArc(pen, cx - 5f * u, cy - 5f * u, 10f * u, 10f * u, 40, 230);
+                g.DrawArc(pen, cx - 1.5f * u, cy - 5.2f * u, 7f * u, 7.6f * u, 105, 165);
+                break;
+
+            case VectorIcon.RefreshUpdate:
+                g.DrawArc(pen, cx - 4.8f * u, cy - 4.8f * u, 9.6f * u, 9.6f * u, -55, 290);
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(cx + 1.4f * u, cy - 5.2f * u),
+                    new PointF(cx + 4.4f * u, cy - 4.4f * u),
+                    new PointF(cx + 3.6f * u, cy - 1.4f * u)
+                });
+                g.DrawLine(pen, cx, cy - 2f * u, cx, cy + 2f * u);
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(cx - 1.6f * u, cy + 0.4f * u),
+                    new PointF(cx, cy + 2f * u),
+                    new PointF(cx + 1.6f * u, cy + 0.4f * u)
+                });
+                break;
+
+            case VectorIcon.DockRight:
+                using (var gp = GraphicsExt.CreateRoundedRect(new RectangleF(cx - 5.2f * u, cy - 4.4f * u, 10.4f * u, 8.8f * u), 1.3f * u))
+                    g.DrawPath(pen, gp);
+                g.DrawLine(pen, cx + 1.4f * u, cy - 4.4f * u, cx + 1.4f * u, cy + 4.4f * u);
+                g.FillRectangle(brush, cx + 1.8f * u, cy - 3.6f * u, 3f * u, 7.2f * u);
+                break;
+
+            case VectorIcon.DockBottom:
+                using (var gp = GraphicsExt.CreateRoundedRect(new RectangleF(cx - 5.2f * u, cy - 4.4f * u, 10.4f * u, 8.8f * u), 1.3f * u))
+                    g.DrawPath(pen, gp);
+                g.DrawLine(pen, cx - 5.2f * u, cy + 1f * u, cx + 5.2f * u, cy + 1f * u);
+                g.FillRectangle(brush, cx - 4.4f * u, cy + 1.4f * u, 8.8f * u, 2.6f * u);
+                break;
+
+            case VectorIcon.ExternalWindow:
+                using (var gp = GraphicsExt.CreateRoundedRect(new RectangleF(cx - 5f * u, cy - 3.4f * u, 8.4f * u, 8.4f * u), 1.2f * u))
+                    g.DrawPath(pen, gp);
+                g.DrawLine(pen, cx + 0.2f * u, cy - 0.2f * u, cx + 5.2f * u, cy - 5.2f * u);
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(cx + 1.8f * u, cy - 5.2f * u),
+                    new PointF(cx + 5.2f * u, cy - 5.2f * u),
+                    new PointF(cx + 5.2f * u, cy - 1.8f * u)
+                });
+                break;
+
+            case VectorIcon.InspectCursor:
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(cx - 1.2f * u, cy + 4.8f * u),
+                    new PointF(cx - 5f * u, cy + 4.8f * u),
+                    new PointF(cx - 5f * u, cy - 5f * u),
+                    new PointF(cx + 4.8f * u, cy - 5f * u),
+                    new PointF(cx + 4.8f * u, cy - 1.2f * u)
+                });
+                g.DrawPolygon(pen, new[]
+                {
+                    new PointF(cx - 0.4f * u, cy - 0.4f * u),
+                    new PointF(cx + 5.2f * u, cy + 1.8f * u),
+                    new PointF(cx + 2.6f * u, cy + 2.6f * u),
+                    new PointF(cx + 1.8f * u, cy + 5.2f * u)
+                });
+                break;
+
+            case VectorIcon.DeviceMobile:
+                using (var gp = GraphicsExt.CreateRoundedRect(new RectangleF(cx - 3.4f * u, cy - 5.4f * u, 6.8f * u, 10.8f * u), 1.4f * u))
+                    g.DrawPath(pen, gp);
+                g.FillEllipse(brush, cx - 0.8f * u, cy + 2.8f * u, 1.6f * u, 1.6f * u);
+                break;
+
+            case VectorIcon.Terminal:
+                using (var gp = GraphicsExt.CreateRoundedRect(new RectangleF(cx - 5.2f * u, cy - 4.4f * u, 10.4f * u, 8.8f * u), 1.4f * u))
+                    g.DrawPath(pen, gp);
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(cx - 3f * u, cy - 1.8f * u),
+                    new PointF(cx - 0.6f * u, cy),
+                    new PointF(cx - 3f * u, cy + 1.8f * u)
+                });
+                g.DrawLine(pen, cx + 0.6f * u, cy + 2f * u, cx + 3.2f * u, cy + 2f * u);
+                break;
+
+            case VectorIcon.Network:
+                g.DrawLine(pen, cx - 2.6f * u, cy - 4.8f * u, cx - 2.6f * u, cy + 4.8f * u);
+                g.DrawLines(pen, new[] { new PointF(cx - 4.6f * u, cy - 2.6f * u), new PointF(cx - 2.6f * u, cy - 4.8f * u), new PointF(cx - 0.6f * u, cy - 2.6f * u) });
+                g.DrawLine(pen, cx + 2.6f * u, cy - 4.8f * u, cx + 2.6f * u, cy + 4.8f * u);
+                g.DrawLines(pen, new[] { new PointF(cx + 0.6f * u, cy + 2.6f * u), new PointF(cx + 2.6f * u, cy + 4.8f * u), new PointF(cx + 4.6f * u, cy + 2.6f * u) });
+                break;
+
+            case VectorIcon.Database:
+                g.DrawEllipse(pen, cx - 4.6f * u, cy - 5.2f * u, 9.2f * u, 3.2f * u);
+                g.DrawArc(pen, cx - 4.6f * u, cy - 1.4f * u, 9.2f * u, 3.2f * u, 0, 180);
+                g.DrawArc(pen, cx - 4.6f * u, cy + 2.2f * u, 9.2f * u, 3.2f * u, 0, 180);
+                g.DrawLine(pen, cx - 4.6f * u, cy - 3.6f * u, cx - 4.6f * u, cy + 3.8f * u);
+                g.DrawLine(pen, cx + 4.6f * u, cy - 3.6f * u, cx + 4.6f * u, cy + 3.8f * u);
+                break;
+
+            case VectorIcon.Exit:
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(cx + 0.8f * u, cy - 4.8f * u),
+                    new PointF(cx - 4.6f * u, cy - 4.8f * u),
+                    new PointF(cx - 4.6f * u, cy + 4.8f * u),
+                    new PointF(cx + 0.8f * u, cy + 4.8f * u)
+                });
+                g.DrawLine(pen, cx - 1f * u, cy, cx + 5f * u, cy);
+                g.DrawLines(pen, new[]
+                {
+                    new PointF(cx + 2.6f * u, cy - 2.4f * u),
+                    new PointF(cx + 5f * u, cy),
+                    new PointF(cx + 2.6f * u, cy + 2.4f * u)
+                });
+                break;
+
+            case VectorIcon.Puzzle:
+                using (var gp = new GraphicsPath())
+                {
+                    gp.AddLine(cx - 4.6f * u, cy - 2.4f * u, cx - 1.4f * u, cy - 2.4f * u);
+                    gp.AddArc(cx - 1.4f * u, cy - 5.2f * u, 2.8f * u, 2.8f * u, 160, 220);
+                    gp.AddLine(cx + 1.4f * u, cy - 2.4f * u, cx + 4f * u, cy - 2.4f * u);
+                    gp.AddLine(cx + 4f * u, cy - 2.4f * u, cx + 4f * u, cy - 0.6f * u);
+                    gp.AddArc(cx + 2.8f * u, cy - 1.2f * u, 2.8f * u, 2.8f * u, -110, 220);
+                    gp.AddLine(cx + 4f * u, cy + 1.6f * u, cx + 4f * u, cy + 4.6f * u);
+                    gp.AddLine(cx + 4f * u, cy + 4.6f * u, cx - 4.6f * u, cy + 4.6f * u);
+                    gp.AddLine(cx - 4.6f * u, cy + 4.6f * u, cx - 4.6f * u, cy - 2.4f * u);
+                    gp.CloseFigure();
+                    g.DrawPath(pen, gp);
+                }
+                break;
+
+            case VectorIcon.Sidebar:
+                using (var gp = GraphicsExt.CreateRoundedRect(new RectangleF(cx - 5.2f * u, cy - 4.4f * u, 10.4f * u, 8.8f * u), 1.3f * u))
+                    g.DrawPath(pen, gp);
+                g.DrawLine(pen, cx - 1.4f * u, cy - 4.4f * u, cx - 1.4f * u, cy + 4.4f * u);
+                g.FillRectangle(brush, cx - 4.5f * u, cy - 3.6f * u, 2.6f * u, 7.2f * u);
+                break;
         }
     }
 }
@@ -576,7 +869,7 @@ public sealed class IconButton : Control
         }
         else
         {
-            float padX = 9f * sc;
+            float padX = _icon == VectorIcon.None ? 4f * sc : 9f * sc;
             float x = padX;
             if (_icon != VectorIcon.None)
             {
@@ -584,9 +877,10 @@ public sealed class IconButton : Control
                 IconPainter.Draw(g, _icon, iconRect, fg, 1.6f * Math.Max(1f, sc * 0.9f));
                 x += iconSz + 5f * sc;
             }
-            var txtRect = new Rectangle((int)x, 0, Math.Max(10, Width - (int)x - (int)(6f * sc)), Height);
+            var txtRect = new Rectangle((int)x, 0, Math.Max(10, Width - (int)x - (int)(_icon == VectorIcon.None ? 4f * sc : 6f * sc)), Height);
             TextRenderer.DrawText(g, _labelText, Font, txtRect, fg,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+                (_icon == VectorIcon.None ? TextFormatFlags.HorizontalCenter : TextFormatFlags.Left) |
+                TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }
     }
 }
@@ -897,6 +1191,9 @@ public sealed class ModernTabItem
     public bool Loading { get; init; }
     public bool Sleeping { get; init; }
     public bool DeepUnloaded { get; init; }
+    public bool Pinned { get; init; }
+    public bool PlayingAudio { get; init; }
+    public bool Muted { get; init; }
 }
 
 public sealed class ModernTabBar : Control
@@ -959,22 +1256,31 @@ public sealed class ModernTabBar : Control
         float rightReserve = plusSize + 18f * sc;
         float avail = Math.Max(80f, Width - leftPad - rightReserve);
 
-        int count = _items.Count;
         float gap = 4f * sc;
-        float tabW = count == 0
+        int pinnedCount = _items.Count(x => x.Pinned);
+        int normalCount = _items.Count - pinnedCount;
+        float pinnedW = 48f * sc;
+        float pinnedTotalW = pinnedCount > 0 ? pinnedCount * (pinnedW + gap) : 0f;
+        float availNormal = Math.Max(60f, avail - pinnedTotalW);
+
+        float tabW = normalCount == 0
             ? 180f * sc
-            : Math.Clamp((avail - gap * Math.Max(0, count - 1)) / count, 96f * sc, 215f * sc);
+            : Math.Clamp((availNormal - gap * Math.Max(0, normalCount - 1)) / normalCount, 96f * sc, 215f * sc);
         float tabH = Height - 6f * sc;
         float y = 6f * sc;
         float x = leftPad;
 
-        for (int i = 0; i < count; i++)
+        for (int i = 0; i < _items.Count; i++)
         {
-            var r = new RectangleF(x, y, tabW, tabH);
+            var item = _items[i];
+            float w = item.Pinned ? pinnedW : tabW;
+            var r = new RectangleF(x, y, w, tabH);
             _tabRects.Add(r);
             float cSz = 18f * sc;
-            _closeRects.Add(new RectangleF(r.Right - cSz - 6f * sc, r.Y + (r.Height - cSz) / 2f, cSz, cSz));
-            x += tabW + gap;
+            _closeRects.Add(item.Pinned
+                ? RectangleF.Empty
+                : new RectangleF(r.Right - cSz - 6f * sc, r.Y + (r.Height - cSz) / 2f, cSz, cSz));
+            x += w + gap;
         }
 
         _plusRect = new RectangleF(x + 2f * sc, y + (tabH - plusSize) / 2f, plusSize, plusSize);
@@ -985,7 +1291,7 @@ public sealed class ModernTabBar : Control
         int newTab = -1, newClose = -1;
         for (int i = 0; i < _tabRects.Count; i++)
         {
-            if (_closeRects[i].Contains(e.Location)) { newTab = i; newClose = i; break; }
+            if (!_closeRects[i].IsEmpty && _closeRects[i].Contains(e.Location)) { newTab = i; newClose = i; break; }
             if (_tabRects[i].Contains(e.Location)) { newTab = i; break; }
         }
         bool newPlus = _plusRect.Contains(e.Location);
@@ -1030,7 +1336,8 @@ public sealed class ModernTabBar : Control
             if (!_tabRects[i].Contains(e.Location)) continue;
             var item = _items[i];
 
-            if (e.Button == MouseButtons.Middle || (e.Button == MouseButtons.Left && _closeRects[i].Contains(e.Location)))
+            if ((e.Button == MouseButtons.Middle && !item.Pinned) ||
+                (e.Button == MouseButtons.Left && !_closeRects[i].IsEmpty && _closeRects[i].Contains(e.Location)))
                 TabClosed?.Invoke(item.Id);
             else if (e.Button == MouseButtons.Left)
                 TabSelected?.Invoke(item.Id);
@@ -1100,19 +1407,46 @@ public sealed class ModernTabBar : Control
             }
 
             float iconSz = 13f * sc;
-            var iconRect = new RectangleF(r.X + 10f * sc, r.Y + (r.Height - iconSz) / 2f, iconSz, iconSz);
             VectorIcon glyph = item.Loading ? VectorIcon.Reload
                 : (item.Sleeping || item.DeepUnloaded) ? VectorIcon.Sleep
+                : item.Pinned ? VectorIcon.Pin
                 : VectorIcon.Globe;
             Color glyphColor = item.Loading ? Palette.Accent
                 : (item.Sleeping || item.DeepUnloaded) ? Palette.AccentPurple
-                : (item.Active ? Palette.Accent : Palette.TextMuted);
+                : (item.Active || item.Pinned ? Palette.Accent : Palette.TextMuted);
+
+            if (item.Pinned)
+            {
+                float px = (item.PlayingAudio || item.Muted) ? r.X + 9f * sc : r.X + (r.Width - iconSz) / 2f;
+                IconPainter.Draw(g, glyph, new RectangleF(px, r.Y + (r.Height - iconSz) / 2f, iconSz, iconSz), glyphColor, 1.5f);
+                if (item.PlayingAudio || item.Muted)
+                {
+                    float aSz = 11f * sc;
+                    IconPainter.Draw(g, item.Muted ? VectorIcon.VolumeOff : VectorIcon.VolumeOn,
+                        new RectangleF(r.Right - aSz - 7f * sc, r.Y + (r.Height - aSz) / 2f, aSz, aSz),
+                        item.Muted ? Palette.Red : Palette.Accent, 1.4f);
+                }
+                continue;
+            }
+
+            var iconRect = new RectangleF(r.X + 10f * sc, r.Y + (r.Height - iconSz) / 2f, iconSz, iconSz);
             IconPainter.Draw(g, glyph, iconRect, glyphColor, 1.45f);
+
+            float rightStopX = _closeRects[i].X;
+            if (item.PlayingAudio || item.Muted)
+            {
+                float aSz = 12f * sc;
+                float ax = _closeRects[i].X - aSz - 4f * sc;
+                IconPainter.Draw(g, item.Muted ? VectorIcon.VolumeOff : VectorIcon.VolumeOn,
+                    new RectangleF(ax, r.Y + (r.Height - aSz) / 2f, aSz, aSz),
+                    item.Muted ? Palette.Red : Palette.Accent, 1.4f);
+                rightStopX = ax;
+            }
 
             var titleRect = new Rectangle(
                 (int)(iconRect.Right + 6f * sc),
                 (int)r.Y,
-                Math.Max(10, (int)(_closeRects[i].X - iconRect.Right - 8f * sc)),
+                Math.Max(10, (int)(rightStopX - iconRect.Right - 8f * sc)),
                 (int)r.Height);
             using var titleFont = new Font(Font.FontFamily, Font.Size, item.Active ? FontStyle.Bold : FontStyle.Regular);
             TextRenderer.DrawText(g, item.Title, titleFont, titleRect,

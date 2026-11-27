@@ -755,3 +755,103 @@ public sealed class ShortcutEditDialog : Form
         Close();
     }
 }
+
+public sealed class ClearBrowsingDataDialog : Form
+{
+    public bool ClearHistory { get; private set; }
+    public bool ClearDownloads { get; private set; }
+    public bool ClearCache { get; private set; }
+    public bool ClearCookies { get; private set; }
+    public bool ClearSiteStorage { get; private set; }
+
+    public ClearBrowsingDataDialog(ThemePalette? palette = null)
+    {
+        var p = palette ?? ThemeService.Dark;
+
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
+        Text = "Tarama Verilerini Temizle";
+        Size = new Size(440, 355);
+        StartPosition = FormStartPosition.CenterParent;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = false;
+        MinimizeBox = false;
+        BackColor = p.BaseBg;
+        ForeColor = p.TextPrimary;
+        Padding = new Padding(20);
+        ThemeService.ApplyNativeTitleBarTheme(Handle, p != ThemeService.Light);
+
+        var head = new Label
+        {
+            Text = "Temizlenecek tarama verilerini seçin:",
+            Dock = DockStyle.Top,
+            Height = 28,
+            Font = new Font("Segoe UI", 10f, FontStyle.Bold),
+            ForeColor = p.TextPrimary,
+            UseMnemonic = false
+        };
+
+        var stack = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Padding = new Padding(0, 8, 0, 8)
+        };
+
+        CheckBox MakeChk(string text, bool checkedByDefault) => new()
+        {
+            Text = text,
+            Checked = checkedByDefault,
+            AutoSize = true,
+            Font = new Font("Segoe UI", 9.5f),
+            ForeColor = p.TextPrimary,
+            Margin = new Padding(0, 4, 0, 6),
+            Cursor = Cursors.Hand,
+            UseMnemonic = false
+        };
+
+        var chkCache = MakeChk("Önbelleğe alınmış resimler ve dosyalar", true);
+        var chkHistory = MakeChk("Gezinme geçmişi", true);
+        var chkDownloads = MakeChk("İndirme geçmişi kayıtları (dosyalar silinmez)", false);
+        var chkCookies = MakeChk("Çerezler ve oturum verileri", false);
+        var chkStorage = MakeChk("Site depolama alanları (LocalStorage / IndexedDB)", false);
+
+        stack.Controls.AddRange(new Control[] { chkCache, chkHistory, chkDownloads, chkCookies, chkStorage });
+
+        var footer = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 46,
+            FlowDirection = FlowDirection.RightToLeft,
+            Padding = new Padding(0, 8, 0, 0)
+        };
+        var cancelBtn = new ModernButton { Text = "İptal", DialogResult = DialogResult.Cancel, Width = 88, Height = 34 };
+        cancelBtn.ApplyTheme(p);
+        var clearBtn = new ModernButton { Text = "Verileri Temizle", Primary = true, Width = 148, Height = 34, Margin = new Padding(0, 0, 8, 0) };
+        clearBtn.ApplyTheme(p);
+        clearBtn.FitWidthToText(138, 28);
+        clearBtn.Click += (_, _) =>
+        {
+            ClearCache = chkCache.Checked;
+            ClearHistory = chkHistory.Checked;
+            ClearDownloads = chkDownloads.Checked;
+            ClearCookies = chkCookies.Checked;
+            ClearSiteStorage = chkStorage.Checked;
+            DialogResult = DialogResult.OK;
+            Close();
+        };
+
+        footer.Controls.Add(cancelBtn);
+        footer.Controls.Add(clearBtn);
+        Controls.Add(stack);
+        Controls.Add(head);
+        Controls.Add(footer);
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        ThemeService.ApplyNativeTitleBarTheme(Handle, ForeColor != ThemeService.Light.TextPrimary);
+    }
+}

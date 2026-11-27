@@ -2,6 +2,25 @@
 
 ---
 
+## v4.2.0 — Gerçek CDP DevTools, Chrome/Edge Eklenti Mağazası, 6 Tarayıcı UX Standartları & Sürükle-Bırak Yenilemesi
+- 🛠️ **Gerçek Chrome Tarzı Geliştirici Araçları (`F12` / `Ctrl+Shift+I` / Sağ Tık → İncele):**
+  - Eski OS pencere bindirme (HWND overlay) yaklaşımı tamamen kaldırıldı; `CoreWebView2` Chrome DevTools Protocol (CDP) kullanan yerleşik `DevToolsPanel` oluşturuldu.
+  - **Öğeler** (DOM ağacı, hesaplanan CSS stilleri, canlı satır içi stil editörü), **Konsol + JS REPL**, **Ağ** (istek/yanıt gövdesi ve önbellek devreden çıkarma), **Depo** (Çerezler, LocalStorage, SessionStorage), **Kaynak** (`Ctrl+U`), **Öğe Seçici (`Ctrl+Shift+C`)** ve **Mobil/Tablet Cihaz Emülasyonu**.
+  - Sağa (`Dock Right`), alta (`Dock Bottom`) veya harici Tam Chromium DevTools penceresine tek tıkla geçiş.
+- 🧩 **Chromium Eklenti Motoru & Mağaza Entegrasyonu (`Ctrl+Shift+E`):**
+  - `CoreWebView2EnvironmentOptions.AreBrowserExtensionsEnabled = true` ve `AddBrowserExtensionAsync` ile gerçek Chromium eklenti desteği.
+  - **Chrome Web Store**, **Microsoft Edge Add-ons**, `.crx` (CRX2/CRX3) / `.zip` paketleri ve açık eklenti klasörü yükleme.
+  - Mağaza sayfalarında üstte tek tıkla **`ED Browser'a Ekle`** algılama çubuğu.
+- 🎛️ **6 Tarayıcı (Opera, Brave, Yandex, Chrome, Edge, Firefox) Referanslı Üst Çubuk & Menü:**
+  - Adres çubuğu yanına **`− %100 +` Yakınlaştırma**, araç çubuğuna doğrudan **Ekran Görüntüsü**, **Tam Ekran** ve **Eklentiler** butonları eklendi.
+  - İsteğe bağlı Opera/Yandex tarzı **Sol Kenar Çubuğu (`Ctrl+Shift+L`)** eklendi.
+  - Plain `ContextMenuStrip` yerine modern yuvarlatılmış, ikonlu, kısayol etiketli ve web sayfasına tıklanınca anında kapanan **`AppMenuPopup`** getirildi.
+  - Yeni özellikler: **Kapalı Sekmeyi Yeniden Aç (`Ctrl+Shift+T`)**, **Sekme Sabitleme & Ses Kapatma (`🔊/🔇`)**, **Yeni Pencere (`Ctrl+N`)**, **Tarama Verilerini Temizle (`Ctrl+Shift+Del`)**, **Sayfayı Kaydet (`Ctrl+S`) / PDF Olarak Kaydet**, **Sayfa Kaynağı (`Ctrl+U`)**.
+- 🔖 **Sorunsuz Yer İmleri Sürükle-Bırak:**
+  - WinForms OLE `DoDragDrop` kaldırılıp özel tek yüzeyli **`BookmarkBarControl`** ile doğrudan fare yakalamalı sürükleme getirildi: hayalet önizleme, ekleme çizgisi, klasör içi vurgulama ve taşan yer imleri için `»` menüsü. Yan panel `TreeView` sürükle-bırak ve `Kök Dizine Taşı` düzeltildi.
+
+---
+
 ## v4.1.0 — Ultra Düşük RAM Mimarisi, Kurulum Sihirbazı & Açık Kaynak Sürümü
 - 🚀 **Yeni Mimari (WinForms GDI+ + Edge WebView2 Chromium Motoru):** Electron kaldırıldı; arayüz tamamen yerel GDI+ vektör çizime taşındı.
 - 📦 **Kurulum Sürümü (`ED.Browser.Setup.4.1.0.exe`):** Masaüstü & Başlat Menüsü kısayolları, Windows Uygulamalar listesi kaydı ve `Uninstall.exe --uninstall` kaldırma sihirbazı eklendi.

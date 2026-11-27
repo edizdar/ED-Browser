@@ -16,11 +16,12 @@ public enum ProxyMode
 
 public sealed class BrowserSettings
 {
-    public string Version { get; set; } = "4.1.0";
+    public string Version { get; set; } = "4.2.0";
     public string HomePage { get; set; } = "https://www.google.com";
     public string SearchEngine { get; set; } = "https://www.google.com/search?q=";
     public BrowserTheme Theme { get; set; } = BrowserTheme.Dark;
     public bool ShowBookmarkBar { get; set; } = true;
+    public bool ShowLeftSidebar { get; set; } = false;
     public bool AdBlockEnabled { get; set; } = true;
     public bool HardwareAcceleration { get; set; } = true;
     public bool BackgroundTabThrottle { get; set; } = true;

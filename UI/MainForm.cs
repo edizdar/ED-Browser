@@ -1,18 +1,24 @@
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using EDBrowser.Models;
 using EDBrowser.Services;
+using Microsoft.Web.WebView2.Core;
 
 namespace EDBrowser.UI;
 
 public sealed class MainForm : Form
 {
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+
     private readonly BrowserContext _ctx;
     private readonly bool _incognito;
     private readonly string? _incognitoDir;
     private readonly List<BrowserTab> _tabs = new();
+    private readonly Stack<string> _closedTabUrls = new();
     private BrowserTab? _activeTab;
     private ThemePalette _palette;
 
@@ -31,7 +37,14 @@ public sealed class MainForm : Form
     private readonly IconButton _bmStarBtn;
     private bool _omniboxFocused;
 
+    private readonly Panel _zoomPill;
+    private readonly IconButton _zoomOutBtn;
+    private readonly IconButton _zoomResetBtn;
+    private readonly IconButton _zoomInBtn;
     private readonly IconButton _ramBtn;
+    private readonly IconButton _shotBtn;
+    private readonly IconButton _fsBtn;
+    private readonly IconButton _extBtn;
     private readonly IconButton _pwBtn;
     private readonly IconButton _dlBtn;
     private readonly IconButton _bmBtn;
@@ -40,12 +53,21 @@ public sealed class MainForm : Form
     private readonly IconButton _cfgBtn;
     private readonly IconButton _moreBtn;
 
-    private readonly FlowLayoutPanel _bookmarkBar;
+    private readonly Panel _leftSidebar;
+    private readonly List<IconButton> _sidebarButtons = new();
+    private readonly BookmarkBarControl _bookmarkBar;
     private readonly Panel _contentHost;
-    private readonly Panel _devToolsDockPanel;
+    private readonly DevToolsPanel _devToolsPanel;
     private readonly Splitter _devToolsSplitter;
     private readonly NewTabPanel _newTabPanel;
     private readonly SidePanelHost _sidePanel;
+
+    private readonly Panel _extInstallBanner;
+    private readonly Label _extBannerText;
+    private readonly ModernButton _extInstallBtn;
+    private readonly IconButton _extDismissBtn;
+    private string? _detectedExtUrl;
+    private string? _dismissedExtId;
 
     private readonly ModernCardPanel _findBar;
     private readonly RoundedTextBox _findInput;
@@ -68,12 +90,8 @@ public sealed class MainForm : Form
     private readonly System.Windows.Forms.Timer _memoryTimer;
     private System.Windows.Forms.Timer? _bmHoverTimer;
     private ContextMenuStrip? _activeBookmarkMenu;
-    private Control? _activeBookmarkAnchor;
-    private readonly System.Windows.Forms.Timer _devToolsSyncTimer;
-    private IntPtr _devToolsHwnd;
-    private bool _devToolsAutoDocked;
-    private Point _bmDragStart;
-    private bool _bmDragging;
+    private Rectangle _activeBookmarkAnchorRect;
+    private AppMenuPopup? _activeAppMenu;
 
     private bool _isFullscreen;
     private FormWindowState _preFsState;
@@ -249,7 +267,7 @@ public sealed class MainForm : Form
         _omnibox.Resize += (_, _) => LayoutOmniboxText();
         _urlBox.FontChanged += (_, _) => LayoutOmniboxText();
 
-        // Right Toolbar
+        // Right Toolbar: Zoom Pill (- 100% +) + RAM + Screenshot + Fullscreen + Utility Buttons + App Menu
         var rightTools = new FlowLayoutPanel
         {
             Dock = DockStyle.Right,
@@ -260,6 +278,59 @@ public sealed class MainForm : Form
             Padding = new Padding(8, 1, 0, 0)
         };
 
+        _zoomPill = new Panel
+        {
+            Size = new Size(116, 30),
+            Margin = new Padding(0, 1, 6, 0),
+            Padding = new Padding(2)
+        };
+        _zoomPill.Paint += (_, e) =>
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            var r = new RectangleF(1f, 1f, _zoomPill.Width - 2f, _zoomPill.Height - 2f);
+            using var gp = GraphicsExt.CreateRoundedRect(r, r.Height / 2f);
+            using (var bg = new SolidBrush(_palette.ElevatedBg))
+                e.Graphics.FillPath(bg, gp);
+            using var pen = new Pen(_palette.Border, 1f);
+            e.Graphics.DrawPath(pen, gp);
+        };
+
+        _zoomOutBtn = new IconButton
+        {
+            IconType = VectorIcon.Minus,
+            Location = new Point(4, 3),
+            Size = new Size(24, 24),
+            IconSizePx = 11,
+            CornerRadius = 12
+        };
+        _zoomOutBtn.SetTooltip("Uzaklaştır (Ctrl+-)");
+        _zoomOutBtn.Click += (_, _) => ChangeZoom(-0.10);
+
+        _zoomResetBtn = new IconButton
+        {
+            IconType = VectorIcon.None,
+            LabelText = "%100",
+            Location = new Point(30, 3),
+            Size = new Size(56, 24),
+            CornerRadius = 10,
+            Font = new Font("Segoe UI", 8.25f, FontStyle.Bold)
+        };
+        _zoomResetBtn.SetTooltip("Yakınlaştırmayı Sıfırla (%100)");
+        _zoomResetBtn.Click += (_, _) => ResetZoom();
+
+        _zoomInBtn = new IconButton
+        {
+            IconType = VectorIcon.Plus,
+            Location = new Point(88, 3),
+            Size = new Size(24, 24),
+            IconSizePx = 11,
+            CornerRadius = 12
+        };
+        _zoomInBtn.SetTooltip("Yakınlaştır (Ctrl++)");
+        _zoomInBtn.Click += (_, _) => ChangeZoom(0.10);
+
+        _zoomPill.Controls.AddRange(new Control[] { _zoomOutBtn, _zoomResetBtn, _zoomInBtn });
+
         _ramBtn = new IconButton
         {
             IconType = VectorIcon.Bolt,
@@ -269,54 +340,71 @@ public sealed class MainForm : Form
             Height = 30,
             IconSizePx = 13,
             Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
-            Margin = new Padding(0, 1, 6, 0)
+            Margin = new Padding(0, 1, 4, 0)
         };
         _ramBtn.Click += async (_, _) => await OptimizeRamNowAsync();
 
-        _pwBtn = MakeToolBtn(VectorIcon.Key, "Şifre Yöneticisi", (_, _) => OpenPasswordManager());
+        _shotBtn = MakeToolBtn(VectorIcon.Camera, "Ekran Görüntüsü Al (Ctrl+Shift+S)", (_, _) => ShowScreenshotMenu());
+        _fsBtn = MakeToolBtn(VectorIcon.Fullscreen, "Tam Ekran (F11)", (_, _) => ToggleFullscreen());
+        _extBtn = MakeToolBtn(VectorIcon.Puzzle, "Eklentiler ve Uzantı Mağazası (Ctrl+Shift+E)", (_, _) => OpenExtensionsDialog());
         _dlBtn = MakeToolBtn(VectorIcon.Download, "İndirilenler (Ctrl+Shift+J)", (_, _) => _sidePanel.Toggle("dl"));
-        _bmBtn = MakeToolBtn(VectorIcon.Bookmark, "Yer İmleri", (_, _) => _sidePanel.Toggle("bm"));
-        _histBtn = MakeToolBtn(VectorIcon.History, "Geçmiş", (_, _) => _sidePanel.Toggle("hist"));
-        _incBtn = MakeToolBtn(VectorIcon.Incognito, "Gizli Mod (Ctrl+Shift+P)", (_, _) => OpenIncognitoWindow());
-        _cfgBtn = MakeToolBtn(VectorIcon.Settings, "Ayarlar", (_, _) => OpenSettings());
-        _moreBtn = MakeToolBtn(VectorIcon.MoreDots, "Diğer Araçlar ve Yakınlaştırma", (_, _) => ShowMoreMenu());
+        _bmBtn = MakeToolBtn(VectorIcon.Bookmark, "Yer İmleri (Ctrl+Shift+O)", (_, _) => _sidePanel.Toggle("bm"));
+        _histBtn = MakeToolBtn(VectorIcon.History, "Geçmiş (Ctrl+H)", (_, _) => _sidePanel.Toggle("hist"));
+        _pwBtn = MakeToolBtn(VectorIcon.Key, "Şifre Yöneticisi", (_, _) => OpenPasswordManager());
+        _incBtn = MakeToolBtn(VectorIcon.Incognito, "Gizli Pencere (Ctrl+Shift+P)", (_, _) => OpenIncognitoWindow());
+        _cfgBtn = MakeToolBtn(VectorIcon.Settings, "Ayarlar (Ctrl+,)", (_, _) => OpenSettings());
+        _moreBtn = MakeToolBtn(VectorIcon.MoreDots, "Menü ve Araçlar", (_, _) => ShowMoreMenu());
 
         rightTools.Controls.AddRange(new Control[]
         {
-            _ramBtn, _pwBtn, _dlBtn, _bmBtn, _histBtn, _incBtn, _cfgBtn, _moreBtn
+            _zoomPill, _ramBtn, _shotBtn, _fsBtn, _extBtn, _dlBtn, _bmBtn, _histBtn, _pwBtn, _incBtn, _cfgBtn, _moreBtn
         });
 
         _toolbarPanel.Controls.Add(_omnibox);
         _toolbarPanel.Controls.Add(leftNav);
         _toolbarPanel.Controls.Add(rightTools);
 
-        // 3. Bookmarks Bar
-        _bookmarkBar = new FlowLayoutPanel
+        // 3. Bookmarks Bar (Direct mouse-capture drag-and-drop)
+        _bookmarkBar = new BookmarkBarControl
         {
-            Dock = DockStyle.Top,
-            Height = 32,
-            Padding = new Padding(10, 3, 10, 3),
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            AllowDrop = true,
             Visible = _ctx.Settings.ShowBookmarkBar
         };
-        _bookmarkBar.DragEnter += (_, e) =>
+        _bookmarkBar.BookmarkClicked += item => _ = NavigateActiveAsync(item.Url);
+        _bookmarkBar.BookmarkMiddleClicked += item => _ = AddTabAsync(item.Url);
+        _bookmarkBar.FolderClicked += (folder, rect) => OpenBookmarkFolderDropdown(rect, folder);
+        _bookmarkBar.FolderHovered += (folder, rect) =>
         {
-            if (e.Data?.GetData(typeof(BookmarkItem)) is BookmarkItem)
-                e.Effect = DragDropEffects.Move;
+            if (_activeBookmarkMenu is { Visible: true } && _activeBookmarkAnchorRect != rect)
+                OpenBookmarkFolderDropdown(rect, folder);
         };
-        _bookmarkBar.DragDrop += (_, e) =>
+        _bookmarkBar.DragStarted += CloseBookmarkFolderDropdown;
+        _bookmarkBar.BookmarksReordered += () =>
         {
-            if (e.Data?.GetData(typeof(BookmarkItem)) is not BookmarkItem dragged) return;
-            SidePanelHost.RemoveBookmarkById(_ctx.Bookmarks, dragged.Id);
-            _ctx.Bookmarks.Add(dragged);
             _ctx.Storage.SaveBookmarks(_ctx.Bookmarks);
-            RenderBookmarksBar();
             _sidePanel.RefreshIfOpen("bm");
         };
+        _bookmarkBar.ItemRightClicked += ShowBookmarkBarItemContextMenu;
+        _bookmarkBar.EmptyAreaRightClicked += pt =>
+        {
+            var menu = new ContextMenuStrip { Renderer = new ModernMenuRenderer(_palette), ShowImageMargin = false, Padding = new Padding(4) };
+            menu.Items.Add("Bu Sayfayı Yer İmine Ekle", null, (_, _) => ToggleCurrentBookmark());
+            menu.Items.Add("Yeni Klasör Ekle", null, (_, _) =>
+            {
+                var n = PromptDialog.Show(this, "Yeni Klasör", "Klasör adı:", "", _palette);
+                if (!string.IsNullOrWhiteSpace(n))
+                {
+                    _ctx.Bookmarks.Add(new BookmarkItem { Type = "folder", Name = n.Trim() });
+                    _ctx.Storage.SaveBookmarks(_ctx.Bookmarks);
+                    RenderBookmarksBar();
+                    _sidePanel.RefreshIfOpen("bm");
+                }
+            });
+            menu.Items.Add("Yer İmleri Panelini Aç", null, (_, _) => _sidePanel.ShowMode("bm"));
+            menu.Show(pt);
+        };
+        _bookmarkBar.OverflowClicked += (hidden, rect) => OpenOverflowBookmarksDropdown(rect, hidden);
 
-        // 4. Content Host + DevTools Dock + SidePanel + FindBar + Password Banner
+        // 4. Content Host + Docked DevTools + SidePanel + FindBar + Password Banner
         _contentHost = new Panel { Dock = DockStyle.Fill };
         _newTabPanel = new NewTabPanel();
         _newTabPanel.BindShortcuts(_ctx.Shortcuts);
@@ -325,19 +413,22 @@ public sealed class MainForm : Form
         _newTabPanel.ShortcutsChanged += () => _ctx.Storage.SaveShortcuts(_ctx.Shortcuts);
         _contentHost.Controls.Add(_newTabPanel);
 
-        _devToolsDockPanel = new Panel
+        _devToolsPanel = new DevToolsPanel
         {
             Dock = DockStyle.Right,
-            Width = 460,
+            Width = 540,
             Visible = false
         };
-        _devToolsDockPanel.Resize += (_, _) => SyncDockedDevToolsBounds();
+        _devToolsPanel.DockModeChanged += mode => ApplyDevToolsDockMode(mode);
+        _devToolsPanel.OpenExternalDevToolsRequested += () => _activeTab?.OpenDevTools();
+        _devToolsPanel.CloseRequested += CloseDevToolsPanel;
+
         _devToolsSplitter = new Splitter
         {
             Dock = DockStyle.Right,
             Width = 5,
-            MinExtra = 320,
-            MinSize = 260,
+            MinExtra = 300,
+            MinSize = 240,
             Visible = false
         };
 
@@ -482,22 +573,102 @@ public sealed class MainForm : Form
         _updateBanner.Controls.Add(_updateDlBtn);
         _updateBanner.Controls.Add(_updateDismissBtn);
 
+        // Top 1-Click Extension Store Install Banner
+        _extInstallBanner = new Panel
+        {
+            Height = 40,
+            Dock = DockStyle.Top,
+            Visible = false,
+            Padding = new Padding(14, 5, 14, 5)
+        };
+        _extBannerText = new Label
+        {
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font("Segoe UI", 9.25f, FontStyle.Bold),
+            UseMnemonic = false
+        };
+        _extInstallBtn = new ModernButton
+        {
+            Text = "ED Browser'a Ekle",
+            Primary = true,
+            Dock = DockStyle.Right,
+            Width = 148,
+            Height = 28
+        };
+        _extInstallBtn.FitWidthToText(136, 24);
+        _extInstallBtn.Click += async (_, _) => await InstallDetectedStoreExtensionAsync();
+        _extDismissBtn = new IconButton
+        {
+            IconType = VectorIcon.Close,
+            Dock = DockStyle.Right,
+            Size = new Size(28, 28),
+            IconSizePx = 12,
+            Margin = new Padding(6, 0, 0, 0)
+        };
+        _extDismissBtn.Click += (_, _) =>
+        {
+            if (ExtensionService.TryExtractStoreExtension(_detectedExtUrl, out _, out var extId))
+                _dismissedExtId = extId;
+            _extInstallBanner.Visible = false;
+        };
+        _extInstallBanner.Controls.Add(_extBannerText);
+        _extInstallBanner.Controls.Add(_extInstallBtn);
+        _extInstallBanner.Controls.Add(_extDismissBtn);
+
+        // Optional Opera/Yandex-Style Left Quick-Access Sidebar
+        _leftSidebar = new Panel
+        {
+            Dock = DockStyle.Left,
+            Width = 42,
+            Visible = _ctx.Settings.ShowLeftSidebar,
+            Padding = new Padding(5, 8, 5, 8)
+        };
+        _leftSidebar.Paint += (_, e) =>
+        {
+            using var pen = new Pen(_palette.Border, 1f);
+            e.Graphics.DrawLine(pen, _leftSidebar.Width - 1, 0, _leftSidebar.Width - 1, _leftSidebar.Height);
+        };
+        var sideStack = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0)
+        };
+        IconButton MakeSideBtn(VectorIcon ic, string tip, EventHandler onClick)
+        {
+            var sb = new IconButton { IconType = ic, Size = new Size(32, 32), IconSizePx = 15, CornerRadius = 8, Margin = new Padding(0, 0, 0, 6) };
+            sb.SetTooltip(tip);
+            sb.Click += onClick;
+            _sidebarButtons.Add(sb);
+            return sb;
+        }
+        sideStack.Controls.AddRange(new Control[]
+        {
+            MakeSideBtn(VectorIcon.Bookmark, "Yer İmleri (Ctrl+Shift+O)", (_, _) => _sidePanel.Toggle("bm")),
+            MakeSideBtn(VectorIcon.History, "Geçmiş (Ctrl+H)", (_, _) => _sidePanel.Toggle("hist")),
+            MakeSideBtn(VectorIcon.Download, "İndirilenler (Ctrl+Shift+J)", (_, _) => _sidePanel.Toggle("dl")),
+            MakeSideBtn(VectorIcon.Puzzle, "Eklentiler ve Mağaza (Ctrl+Shift+E)", (_, _) => OpenExtensionsDialog()),
+            MakeSideBtn(VectorIcon.Key, "Şifre Yöneticisi", (_, _) => OpenPasswordManager()),
+            MakeSideBtn(VectorIcon.Camera, "Ekran Görüntüsü Al (Ctrl+Shift+S)", (_, _) => ShowScreenshotMenu()),
+            MakeSideBtn(VectorIcon.Terminal, "Geliştirici Araçları (F12)", (_, _) => _ = ToggleDevToolsAsync()),
+            MakeSideBtn(VectorIcon.Settings, "Ayarlar (Ctrl+,)", (_, _) => OpenSettings())
+        });
+        _leftSidebar.Controls.Add(sideStack);
+
         Controls.Add(_contentHost);
+        Controls.Add(_leftSidebar);
         Controls.Add(_devToolsSplitter);
-        Controls.Add(_devToolsDockPanel);
+        Controls.Add(_devToolsPanel);
         Controls.Add(_sidePanel);
         Controls.Add(_pwBanner);
+        Controls.Add(_extInstallBanner);
         Controls.Add(_updateBanner);
         Controls.Add(_bookmarkBar);
         Controls.Add(_toolbarPanel);
         Controls.Add(_tabBar);
-
-        Move += (_, _) => SyncDockedDevToolsBounds();
-        Resize += (_, _) => SyncDockedDevToolsBounds();
-
-        _devToolsSyncTimer = new System.Windows.Forms.Timer { Interval = 350 };
-        _devToolsSyncTimer.Tick += (_, _) => MonitorDevToolsWindow();
-        _devToolsSyncTimer.Start();
 
         _contentHost.Controls.Add(_findBar);
         _contentHost.Resize += (_, _) =>
@@ -604,24 +775,76 @@ public sealed class MainForm : Form
 
     private void ShowMoreMenu()
     {
-        var menu = new ContextMenuStrip { Renderer = new ModernMenuRenderer(_palette), ShowImageMargin = false, Padding = new Padding(4) };
-        int zoomPct = (int)Math.Round((_activeTab?.ZoomFactor ?? 1.0) * 100);
+        if (_activeAppMenu is { IsDisposed: false, Visible: true })
+        {
+            _activeAppMenu.SafeClose();
+            _activeAppMenu = null;
+            return;
+        }
 
-        menu.Items.Add($"Yakınlaştır (+10%)   [{zoomPct}%]", null, (_, _) => ChangeZoom(0.10));
-        menu.Items.Add("Uzaklaştır (-10%)", null, (_, _) => ChangeZoom(-0.10));
-        menu.Items.Add("Yakınlaştırmayı Sıfırla (%100)", null, (_, _) => ResetZoom());
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Ekran Görüntüsü Al (Ctrl+Shift+S)", null, (_, _) => ShowScreenshotMenu());
-        menu.Items.Add("Diğer Tarayıcıdan İçe Aktar", null, (_, _) => OpenImportDialog());
-        menu.Items.Add("Sayfada Ara (Ctrl+F)", null, (_, _) => ToggleFindBar());
-        menu.Items.Add("Yazdır (Ctrl+P)", null, (_, _) => _activeTab?.PrintPage());
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Tam Ekran (F11)", null, (_, _) => ToggleFullscreen());
-        menu.Items.Add("Geliştirici Araçları (F12 / Ctrl+Shift+I)", null, (_, _) => _ = ToggleDevToolsAsync());
-        menu.Items.Add("Ayarlar", null, (_, _) => OpenSettings());
+        var btnScreen = _moreBtn.RectangleToScreen(_moreBtn.ClientRectangle);
+        var anchor = new Point(btnScreen.Right, btnScreen.Bottom + 6);
+        var snap = MemoryManagerService.CaptureProcessTreeSnapshot();
+        var state = BuildAppMenuState(snap.TotalWorkingSetBytes / (1024 * 1024));
 
-        menu.Show(_moreBtn, new Point(_moreBtn.Width - 220, _moreBtn.Height + 4));
+        var popup = new AppMenuPopup(this, state, _palette, anchor);
+        popup.FormClosed += (_, _) =>
+        {
+            if (_activeAppMenu == popup)
+                _activeAppMenu = null;
+        };
+        _activeAppMenu = popup;
+        popup.Show(this);
     }
+
+    private AppMenuState BuildAppMenuState(long totalRamMb) => new()
+    {
+        Version = _ctx.Settings.Version,
+        TotalRamMb = totalRamMb,
+        IsDarkTheme = _incognito || _ctx.Settings.Theme == BrowserTheme.Dark,
+        AdBlockEnabled = _ctx.Settings.AdBlockEnabled,
+        ShowBookmarkBar = _ctx.Settings.ShowBookmarkBar,
+        ShowLeftSidebar = _ctx.Settings.ShowLeftSidebar,
+        IsActiveTabPinned = _activeTab?.IsPinned ?? false,
+        IsActiveTabMuted = _activeTab?.IsMuted ?? false,
+        CanReopenClosedTab = _closedTabUrls.Count > 0,
+        HasNavigatedTab = _activeTab?.HasNavigated ?? false,
+        ZoomPercent = (int)Math.Round((_activeTab?.ZoomFactor ?? 1.0) * 100),
+        IsFullscreen = _isFullscreen,
+        NewTab = () => _ = AddTabAsync(),
+        NewWindow = OpenNewWindow,
+        NewIncognito = OpenIncognitoWindow,
+        ReopenClosedTab = () => _ = ReopenClosedTabAsync(),
+        TogglePinTab = TogglePinActiveTab,
+        ToggleMuteTab = () => _activeTab?.ToggleMute(),
+        DuplicateTab = () => _ = AddTabAsync(_activeTab?.Url),
+        OpenBookmarks = () => _sidePanel.Toggle("bm"),
+        ToggleBookmarkBar = ToggleBookmarkBarVisibility,
+        ToggleLeftSidebar = ToggleLeftSidebarVisibility,
+        OpenHistory = () => _sidePanel.Toggle("hist"),
+        OpenDownloads = () => _sidePanel.Toggle("dl"),
+        OpenExtensions = OpenExtensionsDialog,
+        OpenPasswords = OpenPasswordManager,
+        ZoomOut = () => ChangeZoom(-0.10),
+        ZoomReset = ResetZoom,
+        ZoomIn = () => ChangeZoom(0.10),
+        ToggleFullscreen = ToggleFullscreen,
+        FindInPage = ToggleFindBar,
+        SavePageAs = () => _ = SaveActivePageAsAsync(),
+        PrintPage = () => _activeTab?.PrintPage(),
+        PrintToPdf = () => _ = SaveActivePageAsPdfAsync(),
+        ViewPageSource = () => _ = ViewPageSourceAsync(),
+        TakeScreenshot = ShowScreenshotMenu,
+        ClearBrowsingData = OpenClearBrowsingDataDialog,
+        OptimizeRam = () => _ = OptimizeRamNowAsync(),
+        ImportData = OpenImportDialog,
+        ToggleDevTools = () => _ = ToggleDevToolsAsync(),
+        ToggleTheme = ToggleThemeQuick,
+        ToggleAdBlock = ToggleAdBlockQuick,
+        OpenSettings = OpenSettings,
+        CheckUpdates = () => _ = CheckUpdatesInteractiveAsync(),
+        ExitApp = Close
+    };
 
     // ── TAB MANAGEMENT ──────────────────────────────────────────────────────────
     public async Task AddTabAsync(string? url = null)
@@ -637,6 +860,10 @@ public sealed class MainForm : Form
         tab.AcceleratorForwarded += combo => BeginInvoke(() => HandleShortcut(combo));
         tab.FindRequested += () => BeginInvoke(ToggleFindBar);
         tab.BookmarkRequested += () => BeginInvoke(ToggleCurrentBookmark);
+        tab.ZoomChanged += (t, _) => BeginInvoke(() => { if (t == _activeTab) SyncZoomBadge(); });
+        tab.InspectRequested += (x, y) => BeginInvoke(() => { _ = InspectElementInDevToolsAsync(x, y); });
+        tab.ViewSourceRequested += () => BeginInvoke(() => { _ = ViewPageSourceAsync(); });
+        tab.DevToolsElementPicked += json => BeginInvoke(() => { _ = HandleDevToolsElementPickedAsync(json); });
 
         _tabs.Add(tab);
         await SwitchToTabAsync(tab);
@@ -677,13 +904,20 @@ public sealed class MainForm : Form
         SyncAddressBar();
         SyncNavButtons();
         SyncBookmarkStar();
+        SyncZoomBadge();
         UpdateAdShieldBadge();
+        UpdateExtensionStoreBanner();
+        if (_devToolsPanel.Visible)
+            await _devToolsPanel.AttachToTabAsync(tab);
     }
 
     private async Task CloseTabAsync(BrowserTab tab)
     {
         int idx = _tabs.IndexOf(tab);
         if (idx < 0) return;
+
+        if (!_incognito && tab.HasNavigated && !string.IsNullOrWhiteSpace(tab.Url))
+            _closedTabUrls.Push(tab.Url);
 
         _tabs.RemoveAt(idx);
         tab.Dispose();
@@ -714,6 +948,7 @@ public sealed class MainForm : Form
             SyncNavButtons();
             SyncBookmarkStar();
             UpdateAdShieldBadge();
+            UpdateExtensionStoreBanner();
         }
     }
 
@@ -726,7 +961,10 @@ public sealed class MainForm : Form
             Active = t == _activeTab,
             Loading = t.IsLoading,
             Sleeping = t.IsSleeping,
-            DeepUnloaded = t.IsDeepUnloaded
+            DeepUnloaded = t.IsDeepUnloaded,
+            Pinned = t.IsPinned,
+            PlayingAudio = t.IsPlayingAudio,
+            Muted = t.IsMuted
         }));
     }
 
@@ -734,6 +972,15 @@ public sealed class MainForm : Form
     {
         var menu = new ContextMenuStrip { Renderer = new ModernMenuRenderer(_palette), ShowImageMargin = false, Padding = new Padding(4) };
         menu.Items.Add("Yeni Sekme", null, (_, _) => _ = AddTabAsync());
+        menu.Items.Add(tab.IsPinned ? "Sabitlemeyi Kaldır" : "Sekmeyi Sabitle", null, (_, _) =>
+        {
+            tab.IsPinned = !tab.IsPinned;
+            ReorderPinnedTabs();
+        });
+        if (tab.HasNavigated)
+        {
+            menu.Items.Add(tab.IsMuted ? "Sekme Sesini Aç" : "Sekme Sesini Kapat", null, (_, _) => tab.ToggleMute());
+        }
         if (tab != _activeTab && tab.HasNavigated)
         {
             menu.Items.Add(tab.IsSleeping ? "Sekmeyi Uyandır" : "Sekmeyi Uyut (RAM Tasarrufu)", null, async (_, _) =>
@@ -745,11 +992,22 @@ public sealed class MainForm : Form
         menu.Items.Add("Sekmeyi Çoğalt", null, (_, _) => _ = AddTabAsync(tab.Url));
         menu.Items.Add("Diğer Sekmeleri Kapat", null, async (_, _) =>
         {
-            foreach (var other in _tabs.Where(t => t != tab).ToList())
+            foreach (var other in _tabs.Where(t => t != tab && !t.IsPinned).ToList())
                 await CloseTabAsync(other);
         });
-        menu.Items.Add("Sekmeyi Kapat", null, (_, _) => _ = CloseTabAsync(tab));
+        if (!tab.IsPinned)
+            menu.Items.Add("Sekmeyi Kapat", null, (_, _) => _ = CloseTabAsync(tab));
         menu.Show(screenPos);
+    }
+
+    private void ReorderPinnedTabs()
+    {
+        var pinned = _tabs.Where(t => t.IsPinned).ToList();
+        var normal = _tabs.Where(t => !t.IsPinned).ToList();
+        _tabs.Clear();
+        _tabs.AddRange(pinned);
+        _tabs.AddRange(normal);
+        RenderTabs();
     }
 
     // ── NAVIGATION & TOOLBAR SYNC ───────────────────────────────────────────────
@@ -877,164 +1135,102 @@ public sealed class MainForm : Form
     private void RenderBookmarksBar()
     {
         _bookmarkBar.Visible = _ctx.Settings.ShowBookmarkBar;
-        _bookmarkBar.Controls.Clear();
-        if (!_bookmarkBar.Visible) return;
+        if (_bookmarkBar.Visible)
+            _bookmarkBar.SetBookmarks(_ctx.Bookmarks);
+    }
 
-        foreach (var item in _ctx.Bookmarks)
+    private void ShowBookmarkBarItemContextMenu(BookmarkItem item, Point screenPt)
+    {
+        var ctx = new ContextMenuStrip { Renderer = new ModernMenuRenderer(_palette), ShowImageMargin = false, Padding = new Padding(4) };
+        if (!item.IsFolder)
         {
-            var btn = new IconButton
+            ctx.Items.Add("Aç", null, (_, _) => _ = NavigateActiveAsync(item.Url));
+            ctx.Items.Add("Yeni Sekmede Aç", null, (_, _) => _ = AddTabAsync(item.Url));
+            ctx.Items.Add("URL Kopyala", null, (_, _) => Clipboard.SetText(item.Url));
+            ctx.Items.Add("Düzenle", null, (_, _) =>
             {
-                IconType = item.IsFolder ? VectorIcon.Folder : VectorIcon.Bookmark,
-                AutoWidthFromText = true,
-                CornerRadius = 7,
-                Height = 26,
-                IconSizePx = 12,
-                NormalBg = _palette.SurfaceBg,
-                HoverBg = _palette.HoverBg,
-                IconColor = item.IsFolder ? _palette.Accent : _palette.TextSecondary,
-                BorderColor = item.IsFolder ? _palette.Border : Color.Transparent,
-                Font = new Font("Segoe UI", 8.5f),
-                Margin = new Padding(0, 0, 4, 0),
-                AllowDrop = true,
-                LabelText = string.IsNullOrWhiteSpace(item.Name) ? item.Url : item.Name
-            };
-            btn.UpdateAutoWidth(170);
+                using var dlg = new BookmarkEditDialog(_ctx.Bookmarks, item, palette: _palette);
+                if (dlg.ShowDialog(this) == DialogResult.OK)
+                {
+                    _ctx.Storage.SaveBookmarks(_ctx.Bookmarks);
+                    RenderBookmarksBar();
+                    _sidePanel.RefreshIfOpen("bm");
+                }
+            });
+        }
+        else
+        {
+            ctx.Items.Add("Yeniden Adlandır", null, (_, _) =>
+            {
+                var n = PromptDialog.Show(this, "Yeniden Adlandır", "Yeni klasör adı:", item.Name, _palette);
+                if (!string.IsNullOrWhiteSpace(n))
+                {
+                    item.Name = n.Trim();
+                    _ctx.Storage.SaveBookmarks(_ctx.Bookmarks);
+                    RenderBookmarksBar();
+                    _sidePanel.RefreshIfOpen("bm");
+                }
+            });
+        }
 
-            if (item.IsFolder)
+        int curIdx = _ctx.Bookmarks.IndexOf(item);
+        if (curIdx > 0)
+        {
+            ctx.Items.Add("Sola Taşı", null, (_, _) =>
             {
-                btn.Click += (_, _) =>
-                {
-                    if (_bmDragging) { _bmDragging = false; return; }
-                    OpenBookmarkFolderDropdown(btn, item);
-                };
-                btn.MouseEnter += (_, _) =>
-                {
-                    if (_activeBookmarkMenu is { Visible: true } && _activeBookmarkAnchor != btn)
-                        OpenBookmarkFolderDropdown(btn, item);
-                };
-            }
-            else
-            {
-                btn.Click += (_, _) =>
-                {
-                    if (_bmDragging) { _bmDragging = false; return; }
-                    _ = NavigateActiveAsync(item.Url);
-                };
-            }
-
-            btn.MouseDown += (_, e) =>
-            {
-                if (e.Button == MouseButtons.Left)
-                {
-                    _bmDragStart = e.Location;
-                    _bmDragging = false;
-                }
-            };
-            btn.MouseMove += (_, e) =>
-            {
-                if (e.Button == MouseButtons.Left && !_bmDragging &&
-                    (Math.Abs(e.X - _bmDragStart.X) >= 6 || Math.Abs(e.Y - _bmDragStart.Y) >= 6))
-                {
-                    _bmDragging = true;
-                    CloseBookmarkFolderDropdown();
-                    btn.DoDragDrop(item, DragDropEffects.Move);
-                    _bmDragging = false;
-                }
-            };
-            btn.DragEnter += (_, e) =>
-            {
-                if (e.Data?.GetData(typeof(BookmarkItem)) is BookmarkItem dragged && dragged.Id != item.Id)
-                {
-                    e.Effect = DragDropEffects.Move;
-                    btn.BorderColor = _palette.Accent;
-                    btn.Invalidate();
-                }
-            };
-            btn.DragOver += (_, e) =>
-            {
-                if (e.Data?.GetData(typeof(BookmarkItem)) is BookmarkItem dragged && dragged.Id != item.Id)
-                    e.Effect = DragDropEffects.Move;
-            };
-            btn.DragLeave += (_, _) =>
-            {
-                btn.BorderColor = item.IsFolder ? _palette.Border : Color.Transparent;
-                btn.Invalidate();
-            };
-            btn.DragDrop += (_, e) =>
-            {
-                btn.BorderColor = item.IsFolder ? _palette.Border : Color.Transparent;
-                btn.Invalidate();
-                if (e.Data?.GetData(typeof(BookmarkItem)) is not BookmarkItem dragged) return;
-                if (dragged.Id == item.Id || (dragged.IsFolder && SidePanelHost.IsDescendant(dragged, item.Id)))
-                    return;
-
-                SidePanelHost.RemoveBookmarkById(_ctx.Bookmarks, dragged.Id);
-                if (item.IsFolder)
-                {
-                    item.Children.Add(dragged);
-                }
-                else
-                {
-                    int idx = _ctx.Bookmarks.FindIndex(x => x.Id == item.Id);
-                    _ctx.Bookmarks.Insert(Math.Max(0, idx), dragged);
-                }
+                _ctx.Bookmarks.RemoveAt(curIdx);
+                _ctx.Bookmarks.Insert(curIdx - 1, item);
                 _ctx.Storage.SaveBookmarks(_ctx.Bookmarks);
                 RenderBookmarksBar();
                 _sidePanel.RefreshIfOpen("bm");
-            };
-
-            btn.MouseUp += (_, e) =>
+            });
+        }
+        if (curIdx >= 0 && curIdx < _ctx.Bookmarks.Count - 1)
+        {
+            ctx.Items.Add("Sağa Taşı", null, (_, _) =>
             {
-                if (e.Button != MouseButtons.Right) return;
-                var ctx = new ContextMenuStrip { Renderer = new ModernMenuRenderer(_palette), ShowImageMargin = false, Padding = new Padding(4) };
-                if (!item.IsFolder)
-                {
-                    ctx.Items.Add("Aç", null, (_, _) => _ = NavigateActiveAsync(item.Url));
-                    ctx.Items.Add("Yeni Sekmede Aç", null, (_, _) => _ = AddTabAsync(item.Url));
-                    ctx.Items.Add("URL Kopyala", null, (_, _) => Clipboard.SetText(item.Url));
-                    ctx.Items.Add("Düzenle", null, (_, _) =>
-                    {
-                        using var dlg = new BookmarkEditDialog(_ctx.Bookmarks, item, palette: _palette);
-                        if (dlg.ShowDialog(this) == DialogResult.OK)
-                        {
-                            _ctx.Storage.SaveBookmarks(_ctx.Bookmarks);
-                            RenderBookmarksBar();
-                            _sidePanel.RefreshIfOpen("bm");
-                        }
-                    });
-                }
-                else
-                {
-                    ctx.Items.Add("Yeniden Adlandır", null, (_, _) =>
-                    {
-                        var n = PromptDialog.Show(this, "Yeniden Adlandır", "Yeni klasör adı:", item.Name, _palette);
-                        if (!string.IsNullOrWhiteSpace(n))
-                        {
-                            item.Name = n.Trim();
-                            _ctx.Storage.SaveBookmarks(_ctx.Bookmarks);
-                            RenderBookmarksBar();
-                            _sidePanel.RefreshIfOpen("bm");
-                        }
-                    });
-                }
-                ctx.Items.Add("Sil", null, (_, _) =>
+                _ctx.Bookmarks.RemoveAt(curIdx);
+                _ctx.Bookmarks.Insert(curIdx + 1, item);
+                _ctx.Storage.SaveBookmarks(_ctx.Bookmarks);
+                RenderBookmarksBar();
+                _sidePanel.RefreshIfOpen("bm");
+            });
+        }
+
+        var folders = _ctx.Bookmarks.Where(f => f.IsFolder && f.Id != item.Id && !(item.IsFolder && SidePanelHost.IsDescendant(item, f.Id))).ToList();
+        if (folders.Count > 0)
+        {
+            var moveSub = new ToolStripMenuItem("Klasöre Taşı");
+            foreach (var f in folders)
+            {
+                var targetFolder = f;
+                moveSub.DropDownItems.Add($"📁 {targetFolder.Name}", null, (_, _) =>
                 {
                     SidePanelHost.RemoveBookmarkById(_ctx.Bookmarks, item.Id);
+                    targetFolder.Children.Add(item);
                     _ctx.Storage.SaveBookmarks(_ctx.Bookmarks);
                     RenderBookmarksBar();
-                    SyncBookmarkStar();
                     _sidePanel.RefreshIfOpen("bm");
                 });
-                ctx.Show(btn, e.Location);
-            };
-
-            _bookmarkBar.Controls.Add(btn);
+            }
+            ctx.Items.Add(moveSub);
         }
+
+        ctx.Items.Add(new ToolStripSeparator());
+        ctx.Items.Add("Sil", null, (_, _) =>
+        {
+            SidePanelHost.RemoveBookmarkById(_ctx.Bookmarks, item.Id);
+            _ctx.Storage.SaveBookmarks(_ctx.Bookmarks);
+            RenderBookmarksBar();
+            SyncBookmarkStar();
+            _sidePanel.RefreshIfOpen("bm");
+        });
+        ctx.Show(screenPt);
     }
 
-    private void OpenBookmarkFolderDropdown(IconButton anchor, BookmarkItem folder)
+    private void OpenBookmarkFolderDropdown(Rectangle anchorScreenRect, BookmarkItem folder)
     {
-        if (_activeBookmarkMenu is { Visible: true } && _activeBookmarkAnchor == anchor)
+        if (_activeBookmarkMenu is { Visible: true } && _activeBookmarkAnchorRect == anchorScreenRect)
         {
             CloseBookmarkFolderDropdown();
             return;
@@ -1043,21 +1239,61 @@ public sealed class MainForm : Form
         CloseBookmarkFolderDropdown();
         var menu = BuildFolderDropdown(folder);
         _activeBookmarkMenu = menu;
-        _activeBookmarkAnchor = anchor;
+        _activeBookmarkAnchorRect = anchorScreenRect;
 
         menu.Closed += (_, _) =>
         {
             if (_activeBookmarkMenu == menu)
             {
                 _activeBookmarkMenu = null;
-                _activeBookmarkAnchor = null;
+                _activeBookmarkAnchorRect = Rectangle.Empty;
                 _bmHoverTimer?.Stop();
             }
         };
 
-        menu.Show(anchor, new Point(0, anchor.Height + 2));
+        menu.Show(new Point(anchorScreenRect.Left, anchorScreenRect.Bottom + 2));
 
-        _bmHoverTimer ??= new System.Windows.Forms.Timer { Interval = 120 };
+        _bmHoverTimer ??= new System.Windows.Forms.Timer { Interval = 80 };
+        _bmHoverTimer.Tick -= OnBookmarkHoverTick;
+        _bmHoverTimer.Tick += OnBookmarkHoverTick;
+        _bmHoverTimer.Start();
+    }
+
+    private void OpenOverflowBookmarksDropdown(Rectangle anchorScreenRect, List<BookmarkItem> hiddenItems)
+    {
+        CloseBookmarkFolderDropdown();
+        var menu = new ContextMenuStrip { Renderer = new ModernMenuRenderer(_palette), ShowImageMargin = false, Padding = new Padding(4) };
+        foreach (var n in hiddenItems)
+        {
+            if (n.IsFolder)
+            {
+                var sub = new ToolStripMenuItem($"📁 {n.Name}");
+                var inner = BuildFolderDropdown(n);
+                foreach (ToolStripItem subItem in inner.Items.Cast<ToolStripItem>().ToList())
+                    sub.DropDownItems.Add(subItem);
+                menu.Items.Add(sub);
+            }
+            else
+            {
+                var item = n;
+                var mi = new ToolStripMenuItem(item.Name);
+                mi.Click += (_, _) => _ = NavigateActiveAsync(item.Url);
+                menu.Items.Add(mi);
+            }
+        }
+        _activeBookmarkMenu = menu;
+        _activeBookmarkAnchorRect = anchorScreenRect;
+        menu.Closed += (_, _) =>
+        {
+            if (_activeBookmarkMenu == menu)
+            {
+                _activeBookmarkMenu = null;
+                _activeBookmarkAnchorRect = Rectangle.Empty;
+                _bmHoverTimer?.Stop();
+            }
+        };
+        menu.Show(new Point(Math.Max(8, anchorScreenRect.Right - 180), anchorScreenRect.Bottom + 2));
+        _bmHoverTimer ??= new System.Windows.Forms.Timer { Interval = 80 };
         _bmHoverTimer.Tick -= OnBookmarkHoverTick;
         _bmHoverTimer.Tick += OnBookmarkHoverTick;
         _bmHoverTimer.Start();
@@ -1065,14 +1301,22 @@ public sealed class MainForm : Form
 
     private void OnBookmarkHoverTick(object? sender, EventArgs e)
     {
-        if (_activeBookmarkMenu is null || !_activeBookmarkMenu.Visible || _activeBookmarkAnchor is null)
+        if (_activeBookmarkMenu is null || !_activeBookmarkMenu.Visible || _activeBookmarkAnchorRect.IsEmpty)
         {
             _bmHoverTimer?.Stop();
             return;
         }
 
         var pt = Cursor.Position;
-        var anchorRect = _activeBookmarkAnchor.RectangleToScreen(_activeBookmarkAnchor.ClientRectangle);
+        bool lDown = (GetAsyncKeyState(0x01) & 0x8000) != 0;
+        bool rDown = (GetAsyncKeyState(0x02) & 0x8000) != 0;
+        if ((lDown || rDown) && !IsPointInsideMenuTree(_activeBookmarkMenu, pt) && !_activeBookmarkAnchorRect.Contains(pt))
+        {
+            CloseBookmarkFolderDropdown();
+            return;
+        }
+
+        var anchorRect = _activeBookmarkAnchorRect;
         anchorRect.Inflate(4, 6);
         if (anchorRect.Contains(pt) || IsPointInsideMenuTree(_activeBookmarkMenu, pt))
             return;
@@ -1086,7 +1330,7 @@ public sealed class MainForm : Form
         if (_activeBookmarkMenu is { IsDisposed: false, Visible: true })
             _activeBookmarkMenu.Close();
         _activeBookmarkMenu = null;
-        _activeBookmarkAnchor = null;
+        _activeBookmarkAnchorRect = Rectangle.Empty;
     }
 
     private static bool IsPointInsideMenuTree(ToolStripDropDown menu, Point screenPt)
@@ -1189,10 +1433,23 @@ public sealed class MainForm : Form
             return;
         }
 
-        var menu = new ContextMenuStrip { Renderer = new ModernMenuRenderer(_palette) };
-        menu.Items.Add("Tüm Sayfa", null, async (_, _) => await CaptureScreenshotAsync(areaSelect: false));
-        menu.Items.Add("Alan Seç", null, async (_, _) => await CaptureScreenshotAsync(areaSelect: true));
-        menu.Show(Cursor.Position);
+        var menu = new ContextMenuStrip { Renderer = new ModernMenuRenderer(_palette), ShowImageMargin = false, Padding = new Padding(4) };
+        menu.Items.Add("Tüm Sayfayı Kaydet", null, async (_, _) => await CaptureScreenshotAsync(areaSelect: false));
+        menu.Items.Add("Alan Seçerek Kaydet", null, async (_, _) => await CaptureScreenshotAsync(areaSelect: true));
+
+        var dismissTimer = new System.Windows.Forms.Timer { Interval = 75 };
+        dismissTimer.Tick += (_, _) =>
+        {
+            if (menu.IsDisposed || !menu.Visible) { dismissTimer.Stop(); dismissTimer.Dispose(); return; }
+            bool click = ((GetAsyncKeyState(0x01) & 0x8000) != 0) || ((GetAsyncKeyState(0x02) & 0x8000) != 0);
+            if (click && !menu.Bounds.Contains(Cursor.Position))
+                menu.Close();
+        };
+        menu.Closed += (_, _) => { dismissTimer.Stop(); dismissTimer.Dispose(); };
+        dismissTimer.Start();
+
+        var btnRect = _shotBtn.RectangleToScreen(_shotBtn.ClientRectangle);
+        menu.Show(new Point(btnRect.Left, btnRect.Bottom + 4));
     }
 
     private async Task CaptureScreenshotAsync(bool areaSelect)
@@ -1302,12 +1559,204 @@ public sealed class MainForm : Form
     {
         if (_activeTab is null) return;
         _activeTab.ApplyZoom(_activeTab.ZoomFactor + delta);
+        SyncZoomBadge();
     }
 
     private void ResetZoom()
     {
         if (_activeTab is null) return;
         _activeTab.ApplyZoom(1.0);
+        SyncZoomBadge();
+    }
+
+    private void SyncZoomBadge()
+    {
+        int pct = (int)Math.Round((_activeTab?.ZoomFactor ?? 1.0) * 100);
+        _zoomResetBtn.LabelText = $"%{pct}";
+        _zoomResetBtn.IconColor = pct == 100 ? _palette.TextPrimary : _palette.Accent;
+    }
+
+    private void OpenNewWindow()
+    {
+        var win = new MainForm(_ctx, _incognito, _ctx.Settings.HomePage);
+        win.Show();
+    }
+
+    private async Task ReopenClosedTabAsync()
+    {
+        if (_closedTabUrls.Count == 0) return;
+        var url = _closedTabUrls.Pop();
+        await AddTabAsync(url);
+    }
+
+    private void TogglePinActiveTab()
+    {
+        if (_activeTab is null) return;
+        _activeTab.IsPinned = !_activeTab.IsPinned;
+        ReorderPinnedTabs();
+    }
+
+    private void ToggleBookmarkBarVisibility()
+    {
+        _ctx.Settings.ShowBookmarkBar = !_ctx.Settings.ShowBookmarkBar;
+        _ctx.Storage.SaveSettings(_ctx.Settings);
+        RenderBookmarksBar();
+    }
+
+    private void ToggleLeftSidebarVisibility()
+    {
+        _ctx.Settings.ShowLeftSidebar = !_ctx.Settings.ShowLeftSidebar;
+        _ctx.Storage.SaveSettings(_ctx.Settings);
+        _leftSidebar.Visible = _ctx.Settings.ShowLeftSidebar;
+        _contentHost.BringToFront();
+    }
+
+    private void OpenExtensionsDialog()
+    {
+        using var dlg = new ExtensionsDialog(
+            _ctx,
+            _activeTab?.WebView?.CoreWebView2?.Profile,
+            url => _ = AddTabAsync(url),
+            _palette);
+        dlg.ShowDialog(this);
+    }
+
+    private void UpdateExtensionStoreBanner()
+    {
+        var url = _activeTab?.Url ?? "";
+        if (!_incognito && ExtensionService.TryExtractStoreExtension(url, out var storeName, out var extId))
+        {
+            bool alreadyInstalled = _ctx.Extensions.Items.Any(x => x.StoreId.Equals(extId, StringComparison.OrdinalIgnoreCase));
+            if (alreadyInstalled || string.Equals(_dismissedExtId, extId, StringComparison.OrdinalIgnoreCase))
+            {
+                _extInstallBanner.Visible = false;
+                return;
+            }
+            _detectedExtUrl = url;
+            _extBannerText.Text = $"{storeName} eklentisi tespit edildi — tek tıkla ED Browser'a kurabilirsin.";
+            _extInstallBtn.Enabled = true;
+            _extInstallBtn.Text = "ED Browser'a Ekle";
+            _extInstallBanner.Visible = true;
+        }
+        else
+        {
+            _detectedExtUrl = null;
+            _extInstallBanner.Visible = false;
+        }
+    }
+
+    private async Task InstallDetectedStoreExtensionAsync()
+    {
+        if (string.IsNullOrEmpty(_detectedExtUrl)) return;
+        _extInstallBtn.Enabled = false;
+        _extInstallBtn.Text = "Kuruluyor…";
+        try
+        {
+            var ext = await _ctx.Extensions.InstallFromStoreUrlOrIdAsync(_detectedExtUrl, _activeTab?.WebView?.CoreWebView2?.Profile);
+            _extInstallBanner.Visible = false;
+            ShowToast("Eklenti Kuruldu", $"{ext.Name} (v{ext.Version}) eklendi.");
+        }
+        catch (Exception ex)
+        {
+            _extInstallBtn.Enabled = true;
+            _extInstallBtn.Text = "ED Browser'a Ekle";
+            MessageBox.Show(this, "Eklenti indirilemedi:\n" + ex.Message, "Eklenti Kurulumu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private void ToggleThemeQuick()
+    {
+        if (_incognito) return;
+        _ctx.Settings.Theme = _ctx.Settings.Theme == BrowserTheme.Dark ? BrowserTheme.Light : BrowserTheme.Dark;
+        _ctx.Storage.SaveSettings(_ctx.Settings);
+        _palette = ThemeService.GetPalette(_ctx.Settings.Theme, _incognito);
+        ApplyTheme();
+        RenderBookmarksBar();
+    }
+
+    private void ToggleAdBlockQuick()
+    {
+        _ctx.Settings.AdBlockEnabled = !_ctx.Settings.AdBlockEnabled;
+        _ctx.Storage.SaveSettings(_ctx.Settings);
+        UpdateAdShieldBadge();
+    }
+
+    private async Task SaveActivePageAsAsync()
+    {
+        if (_activeTab is not null)
+            await _activeTab.SavePageAsAsync();
+    }
+
+    private async Task SaveActivePageAsPdfAsync()
+    {
+        if (_activeTab is null || !_activeTab.HasNavigated) return;
+        using var sfd = new SaveFileDialog
+        {
+            Title = "Sayfayı PDF Olarak Kaydet",
+            InitialDirectory = _ctx.Storage.DownloadsDirectory,
+            FileName = $"sayfa_{DateTime.Now:yyyy-MM-dd_HH-mm}.pdf",
+            Filter = "PDF Dosyası|*.pdf"
+        };
+        if (sfd.ShowDialog(this) == DialogResult.OK)
+        {
+            bool ok = await _activeTab.PrintToPdfAsync(sfd.FileName);
+            ShowToast(ok ? "PDF Kaydedildi" : "PDF Hatası", Path.GetFileName(sfd.FileName));
+        }
+    }
+
+    private void OpenClearBrowsingDataDialog()
+    {
+        using var dlg = new ClearBrowsingDataDialog(_palette);
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        if (dlg.ClearHistory)
+        {
+            _ctx.History.Clear();
+            _ctx.Storage.SaveHistory(_ctx.History);
+            _sidePanel.RefreshIfOpen("hist");
+        }
+        if (dlg.ClearDownloads)
+        {
+            _ctx.Downloads.Clear();
+            _ctx.Storage.SaveDownloads(_ctx.Downloads);
+            _sidePanel.RefreshIfOpen("dl");
+        }
+
+        CoreWebView2BrowsingDataKinds kinds = 0;
+        if (dlg.ClearCache) kinds |= CoreWebView2BrowsingDataKinds.DiskCache;
+        if (dlg.ClearCookies) kinds |= CoreWebView2BrowsingDataKinds.Cookies;
+        if (dlg.ClearSiteStorage)
+        {
+            kinds |= CoreWebView2BrowsingDataKinds.LocalStorage |
+                     CoreWebView2BrowsingDataKinds.IndexedDb |
+                     CoreWebView2BrowsingDataKinds.WebSql |
+                     CoreWebView2BrowsingDataKinds.CacheStorage;
+        }
+        if (kinds != 0 && _activeTab is not null)
+            _ = _activeTab.ClearBrowsingDataAsync(kinds);
+
+        ShowToast("Veriler Temizlendi", "Seçili tarama verileri başarıyla temizlendi.");
+    }
+
+    private async Task CheckUpdatesInteractiveAsync()
+    {
+        var res = await UpdateService.CheckForUpdatesAsync(_ctx.Settings.Version, _ctx.Storage.IsInstalledMode);
+        if (!string.IsNullOrEmpty(res.Error))
+        {
+            MessageBox.Show(this, "Güncelleme sunucusuna şu anda ulaşılamadı.\n" + res.Error, "Güncelleme Denetimi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        if (res.UpdateAvailable)
+        {
+            _updateDownloadUrl = res.DirectDownloadUrl;
+            _updateReleaseUrl = res.ReleaseUrl;
+            _updateBannerText.Text = $"Yeni ED Browser sürümü yayınlandı: v{res.LatestVersion} (Mevcut: v{res.CurrentVersion})";
+            _updateBanner.Visible = true;
+        }
+        else
+        {
+            MessageBox.Show(this, $"ED Browser güncel! (v{res.CurrentVersion})", "Güncelleme Denetimi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
     }
 
     private void ToggleFindBar()
@@ -1432,27 +1881,36 @@ public sealed class MainForm : Form
         var mods = keyData & Keys.Modifiers;
 
         if (mods == Keys.Control && key == Keys.T) { _ = AddTabAsync(); return true; }
-        if (mods == Keys.Control && key == Keys.W) { if (_activeTab is not null) _ = CloseTabAsync(_activeTab); return true; }
+        if (mods == Keys.Control && key == Keys.N) { OpenNewWindow(); return true; }
+        if (mods == Keys.Control && key == Keys.W) { if (_activeTab is not null && !_activeTab.IsPinned) _ = CloseTabAsync(_activeTab); return true; }
         if (mods == Keys.Control && key == Keys.L) { _urlBox.Focus(); _urlBox.SelectAll(); return true; }
         if ((mods == Keys.Control && key == Keys.R) || keyData == Keys.F5) { _activeTab?.ReloadOrStop(); return true; }
         if (mods == Keys.Alt && key == Keys.Left) { _activeTab?.GoBack(); return true; }
         if (mods == Keys.Alt && key == Keys.Right) { _activeTab?.GoForward(); return true; }
         if (mods == Keys.Control && key == Keys.D) { ToggleCurrentBookmark(); return true; }
         if (mods == Keys.Control && key == Keys.F) { ToggleFindBar(); return true; }
+        if (mods == Keys.Control && key == Keys.H) { _sidePanel.Toggle("hist"); return true; }
+        if (mods == Keys.Control && key == Keys.S) { _ = SaveActivePageAsAsync(); return true; }
+        if (mods == Keys.Control && key == Keys.U) { _ = ViewPageSourceAsync(); return true; }
+        if (mods == Keys.Control && key == Keys.Oemcomma) { OpenSettings(); return true; }
         if (mods == Keys.Control && key == Keys.P) { _activeTab?.PrintPage(); return true; }
         if (mods == Keys.Control && (key == Keys.Oemplus || key == Keys.Add)) { ChangeZoom(0.10); return true; }
         if (mods == Keys.Control && (key == Keys.OemMinus || key == Keys.Subtract)) { ChangeZoom(-0.10); return true; }
         if (mods == Keys.Control && (key == Keys.D0 || key == Keys.NumPad0)) { ResetZoom(); return true; }
         if (mods == (Keys.Control | Keys.Shift) && key == Keys.P) { OpenIncognitoWindow(); return true; }
+        if (mods == (Keys.Control | Keys.Shift) && key == Keys.T) { _ = ReopenClosedTabAsync(); return true; }
+        if (mods == (Keys.Control | Keys.Shift) && key == Keys.O) { _sidePanel.Toggle("bm"); return true; }
         if (mods == (Keys.Control | Keys.Shift) && key == Keys.B)
         {
-            _ctx.Settings.ShowBookmarkBar = !_ctx.Settings.ShowBookmarkBar;
-            _ctx.Storage.SaveSettings(_ctx.Settings);
-            RenderBookmarksBar();
+            ToggleBookmarkBarVisibility();
             return true;
         }
+        if (mods == (Keys.Control | Keys.Shift) && key == Keys.L) { ToggleLeftSidebarVisibility(); return true; }
+        if (mods == (Keys.Control | Keys.Shift) && key == Keys.E) { OpenExtensionsDialog(); return true; }
         if (mods == (Keys.Control | Keys.Shift) && key == Keys.J) { _sidePanel.Toggle("dl"); return true; }
         if (mods == (Keys.Control | Keys.Shift) && key == Keys.S) { ShowScreenshotMenu(); return true; }
+        if (mods == (Keys.Control | Keys.Shift) && key == Keys.Delete) { OpenClearBrowsingDataDialog(); return true; }
+        if (mods == (Keys.Control | Keys.Shift) && key == Keys.C) { _ = StartElementPickerAsync(); return true; }
         if (keyData == Keys.F11) { ToggleFullscreen(); return true; }
         if (keyData == Keys.F12 || (mods == (Keys.Control | Keys.Shift) && key == Keys.I))
         {
@@ -1464,6 +1922,7 @@ public sealed class MainForm : Form
             if (_isFullscreen) { ExitFullscreen(); return true; }
             if (_findBar.Visible) { CloseFindBar(); return true; }
             if (_sidePanel.Visible) { _sidePanel.HidePanel(); return true; }
+            if (_devToolsPanel.Visible) { CloseDevToolsPanel(); return true; }
         }
         if (mods == Keys.Control && key >= Keys.D1 && key <= Keys.D9)
         {
@@ -1516,7 +1975,20 @@ public sealed class MainForm : Form
         _ramBtn.IconColor = _palette.Green;
         _ramBtn.BorderColor = _palette.Border;
 
+        _zoomPill.BackColor = _palette.SurfaceBg;
+        _zoomOutBtn.NormalBg = _palette.ElevatedBg;
+        _zoomOutBtn.HoverBg = _palette.HoverBg;
+        _zoomOutBtn.IconColor = _palette.TextSecondary;
+        _zoomInBtn.NormalBg = _palette.ElevatedBg;
+        _zoomInBtn.HoverBg = _palette.HoverBg;
+        _zoomInBtn.IconColor = _palette.TextSecondary;
+        _zoomResetBtn.NormalBg = _palette.ElevatedBg;
+        _zoomResetBtn.HoverBg = _palette.HoverBg;
+        _zoomResetBtn.IconColor = _palette.TextPrimary;
+        _zoomPill.Invalidate();
+
         _bookmarkBar.BackColor = _palette.SurfaceBg;
+        _bookmarkBar.ApplyTheme(_palette);
         _contentHost.BackColor = _palette.BaseBg;
         _findBar.FillColor = _palette.SurfaceBg;
         _findBar.BorderColor = _palette.Border;
@@ -1537,106 +2009,102 @@ public sealed class MainForm : Form
         _updateDismissBtn.HoverBg = _palette.HoverBg;
         _updateDismissBtn.IconColor = _palette.TextMuted;
 
+        _extInstallBanner.BackColor = _palette.ElevatedBg;
+        _extBannerText.ForeColor = _palette.Accent;
+        _extInstallBtn.ApplyTheme(_palette);
+        _extDismissBtn.NormalBg = _palette.ElevatedBg;
+        _extDismissBtn.HoverBg = _palette.HoverBg;
+        _extDismissBtn.IconColor = _palette.TextMuted;
+
+        _leftSidebar.BackColor = _palette.SurfaceBg;
+        foreach (var sb in _sidebarButtons)
+        {
+            sb.NormalBg = _palette.SurfaceBg;
+            sb.HoverBg = _palette.HoverBg;
+            sb.IconColor = _palette.TextSecondary;
+        }
+
         _newTabPanel.ApplyTheme(_palette);
         _sidePanel.ApplyTheme(_palette);
-        _devToolsDockPanel.BackColor = _palette.SurfaceBg;
+        _devToolsPanel.ApplyTheme(_palette);
         _devToolsSplitter.BackColor = _palette.Border;
         RenderTabs();
         SyncAddressBar();
         SyncBookmarkStar();
+        SyncZoomBadge();
         UpdateAdShieldBadge();
     }
 
-    // ── CHROME-LIKE DOCKED DEVTOOLS ─────────────────────────────────────────────
+    // ── CHROME-LIKE DOCKED DEVTOOLS (CDP) ───────────────────────────────────────
     private async Task ToggleDevToolsAsync()
     {
-        if (_activeTab is null || !_activeTab.HasNavigated)
+        if (_devToolsPanel.Visible)
         {
-            ShowToast("Geliştirici Araçları", "Geliştirici araçlarını açmak için önce bir web sayfası açın.");
+            CloseDevToolsPanel();
             return;
         }
 
-        if (_devToolsHwnd != IntPtr.Zero && DevToolsManager.IsOpen(_devToolsHwnd))
-        {
-            DevToolsManager.Close(_devToolsHwnd);
-            CollapseDevToolsDock();
-            return;
-        }
+        await OpenDevToolsPanelAsync();
+    }
 
-        var existing = DevToolsManager.SnapshotVisibleDevToolsHwnds();
-        _devToolsDockPanel.Visible = true;
+    private async Task OpenDevToolsPanelAsync()
+    {
+        _devToolsPanel.Visible = true;
         _devToolsSplitter.Visible = true;
-        _contentHost.BringToFront();
-        PerformLayout();
+        ApplyDevToolsDockMode(_devToolsPanel.DockMode);
+        await _devToolsPanel.AttachToTabAsync(_activeTab);
+    }
 
-        _activeTab.OpenDevTools();
+    private async Task InspectElementInDevToolsAsync(int clientX, int clientY)
+    {
+        await OpenDevToolsPanelAsync();
+        await _devToolsPanel.InspectAtPointAsync(clientX, clientY);
+    }
 
-        IntPtr found = IntPtr.Zero;
-        for (int i = 0; i < 25; i++)
+    private async Task StartElementPickerAsync()
+    {
+        await OpenDevToolsPanelAsync();
+        await _devToolsPanel.ToggleElementPickerAsync();
+    }
+
+    private async Task ViewPageSourceAsync()
+    {
+        await OpenDevToolsPanelAsync();
+        _devToolsPanel.SelectTab(4);
+        await _devToolsPanel.RefreshSourcesListAsync();
+    }
+
+    private async Task HandleDevToolsElementPickedAsync(string json)
+    {
+        if (!_devToolsPanel.Visible)
+            await OpenDevToolsPanelAsync();
+        await _devToolsPanel.HandlePickedElementJsonAsync(json);
+    }
+
+    private void ApplyDevToolsDockMode(DevToolsDockMode mode)
+    {
+        _devToolsPanel.DockMode = mode;
+        if (mode == DevToolsDockMode.Bottom)
         {
-            await Task.Delay(80);
-            found = DevToolsManager.FindDevToolsWindow(existing);
-            if (found != IntPtr.Zero) break;
-        }
-
-        if (found != IntPtr.Zero)
-        {
-            _devToolsHwnd = found;
-            _devToolsAutoDocked = true;
-            var dockRect = _devToolsDockPanel.RectangleToScreen(_devToolsDockPanel.ClientRectangle);
-            DevToolsManager.AttachAsDockedOwner(_devToolsHwnd, Handle, dockRect);
+            _devToolsPanel.Dock = DockStyle.Bottom;
+            _devToolsPanel.Height = 300;
+            _devToolsSplitter.Dock = DockStyle.Bottom;
+            _devToolsSplitter.Height = 5;
         }
         else
         {
-            CollapseDevToolsDock();
+            _devToolsPanel.Dock = DockStyle.Right;
+            _devToolsPanel.Width = 540;
+            _devToolsSplitter.Dock = DockStyle.Right;
+            _devToolsSplitter.Width = 5;
         }
+        _contentHost.BringToFront();
+        PerformLayout();
     }
 
-    private void MonitorDevToolsWindow()
+    private void CloseDevToolsPanel()
     {
-        if (_devToolsHwnd != IntPtr.Zero)
-        {
-            if (!DevToolsManager.IsOpen(_devToolsHwnd))
-                CollapseDevToolsDock();
-            return;
-        }
-
-        // Catch DevTools opened via right-click "İncele"
-        if (_activeTab is { HasNavigated: true } && Visible)
-        {
-            var found = DevToolsManager.FindDevToolsWindow();
-            if (found != IntPtr.Zero)
-            {
-                _devToolsHwnd = found;
-                _devToolsAutoDocked = true;
-                _devToolsDockPanel.Visible = true;
-                _devToolsSplitter.Visible = true;
-                _contentHost.BringToFront();
-                PerformLayout();
-                var dockRect = _devToolsDockPanel.RectangleToScreen(_devToolsDockPanel.ClientRectangle);
-                DevToolsManager.AttachAsDockedOwner(_devToolsHwnd, Handle, dockRect);
-            }
-        }
-    }
-
-    private void SyncDockedDevToolsBounds()
-    {
-        if (!_devToolsAutoDocked || !_devToolsDockPanel.Visible || _devToolsHwnd == IntPtr.Zero)
-            return;
-        if (!DevToolsManager.IsOpen(_devToolsHwnd))
-        {
-            CollapseDevToolsDock();
-            return;
-        }
-        var dockRect = _devToolsDockPanel.RectangleToScreen(_devToolsDockPanel.ClientRectangle);
-        DevToolsManager.UpdateDockBounds(_devToolsHwnd, dockRect);
-    }
-
-    private void CollapseDevToolsDock()
-    {
-        _devToolsHwnd = IntPtr.Zero;
-        _devToolsAutoDocked = false;
-        _devToolsDockPanel.Visible = false;
+        _devToolsPanel.Visible = false;
         _devToolsSplitter.Visible = false;
     }
 
@@ -1665,10 +2133,7 @@ public sealed class MainForm : Form
     private void CleanupOnExit()
     {
         _memoryTimer.Stop();
-        _devToolsSyncTimer.Stop();
-        _devToolsSyncTimer.Dispose();
-        if (_devToolsHwnd != IntPtr.Zero)
-            DevToolsManager.Close(_devToolsHwnd);
+        _activeAppMenu?.SafeClose();
         _bmHoverTimer?.Stop();
         _bmHoverTimer?.Dispose();
         if (_notifyIcon is not null)
@@ -1710,19 +2175,247 @@ public sealed class MainForm : Form
         return SystemIcons.Application;
     }
 
+    public static int RunSelfTests(string? logPath = null)
+    {
+        int failed = 0;
+        var logLines = new List<string>();
+        void Log(string line)
+        {
+            Console.WriteLine(line);
+            logLines.Add(line);
+        }
+        void Assert(bool cond, string name)
+        {
+            Log($"{(cond ? "[PASS]" : "[FAIL]")} {name}");
+            if (!cond) failed++;
+        }
+
+        try
+        {
+            // 1. Test BookmarkBarControl direct mouse-capture drag-and-drop (reorder + folder drop)
+            using (var host = new Form { StartPosition = FormStartPosition.Manual, Location = new Point(-32000, -32000), Size = new Size(1000, 100), ShowInTaskbar = false })
+            using (var bar = new BookmarkBarControl { Width = 960 })
+            {
+                var bms = new List<BookmarkItem>
+                {
+                    new() { Type = "bookmark", Name = "Google", Url = "https://google.com" },
+                    new() { Type = "bookmark", Name = "GitHub", Url = "https://github.com" },
+                    new() { Type = "bookmark", Name = "YouTube", Url = "https://youtube.com" },
+                    new() { Type = "folder", Name = "Araçlar", Children = new List<BookmarkItem>() }
+                };
+                bar.SetBookmarks(bms);
+                host.Controls.Add(bar);
+                host.Show();
+                Application.DoEvents();
+
+                Assert(bar.VisibleCount == 4, "BookmarkBarControl renders all 4 sample items");
+
+                var rect2 = bar.GetItemClientRect(2);
+                var dropRight = new Point(rect2.Right + 6, rect2.Top + rect2.Height / 2);
+                bool moved1 = bar.PerformDragDropSimulation(0, dropRight);
+                Assert(moved1 && bms[0].Name == "GitHub" && bms[1].Name == "YouTube" && bms[2].Name == "Google",
+                    $"Drag forward reorder [Google -> after YouTube] => [{string.Join(", ", bms.Select(x => x.Name))}]");
+
+                var rect0 = bar.GetItemClientRect(0);
+                var dropLeft = new Point(rect0.Left - 2, rect0.Top + rect0.Height / 2);
+                bool moved2 = bar.PerformDragDropSimulation(2, dropLeft);
+                Assert(moved2 && bms[0].Name == "Google" && bms[1].Name == "GitHub" && bms[2].Name == "YouTube",
+                    $"Drag backward reorder [Google -> before GitHub] => [{string.Join(", ", bms.Select(x => x.Name))}]");
+
+                var folderRect = bar.GetItemClientRect(3);
+                var folderCenter = new Point(folderRect.Left + folderRect.Width / 2, folderRect.Top + folderRect.Height / 2);
+                bool moved3 = bar.PerformDragDropSimulation(0, folderCenter);
+                Assert(moved3 && bms.Count == 3 && bms[2].Children.Count == 1 && bms[2].Children[0].Name == "Google",
+                    "Drag bookmark onto folder moves item into Folder.Children");
+
+                host.Close();
+            }
+
+            // 2. Test DevToolsPanel tabs, dock mode, and theme switch
+            using (var dt = new DevToolsPanel { Size = new Size(500, 700) })
+            {
+                dt.PopulatePreviewSampleData();
+                for (int t = 0; t <= 4; t++) dt.SelectTab(t);
+                dt.SelectTab(0);
+                dt.DockMode = DevToolsDockMode.Bottom;
+                dt.ApplyTheme(ThemeService.Light);
+                dt.ApplyTheme(ThemeService.Dark);
+                Assert(dt.ActiveTabIndex == 0 && dt.DockMode == DevToolsDockMode.Bottom, "DevToolsPanel tabs, dock toggle & theme switch");
+            }
+
+            // 3. Test AppMenuPopup bounds and item count
+            using (var owner = new Form { StartPosition = FormStartPosition.Manual, Location = new Point(-32000, -32000), Size = new Size(400, 400), ShowInTaskbar = false })
+            {
+                owner.Show();
+                using var popup = new AppMenuPopup(owner, new AppMenuState { Version = "4.2.0", TotalRamMb = 49, CanReopenClosedTab = true, HasNavigatedTab = true },
+                    ThemeService.Dark, new Point(1200, 120), enableOutsideDismiss: false);
+                popup.Show();
+                Application.DoEvents();
+                Assert(popup.MenuItemCount >= 22 && popup.MaxItemRightEdge <= popup.Width,
+                    $"AppMenuPopup renders {popup.MenuItemCount} rows cleanly inside {popup.Width}px width");
+                popup.SafeClose();
+                owner.Close();
+            }
+
+            // 4. Test ClearBrowsingDataDialog
+            using (var clr = new ClearBrowsingDataDialog(ThemeService.Dark))
+            {
+                clr.StartPosition = FormStartPosition.Manual;
+                clr.Location = new Point(-32000, -32000);
+                clr.Show();
+                Application.DoEvents();
+                Assert(clr.Visible, "ClearBrowsingDataDialog renders cleanly");
+                clr.Close();
+            }
+
+            // 5. Test ExtensionService URL detection & CRX3 unpacking + ExtensionsDialog
+            bool cwsOk = ExtensionService.TryExtractStoreExtension("https://chromewebstore.google.com/detail/ublock-origin/cjpalhdlnbpafiamejdnhcphjbkeiagm", out var s1, out var id1);
+            bool edgeOk = ExtensionService.TryExtractStoreExtension("https://microsoftedge.microsoft.com/addons/detail/ublock-origin/odfafepnkmbhccpbejgmiehpchacaeak", out var s2, out var id2);
+            bool rawOk = ExtensionService.TryExtractStoreExtension("cjpalhdlnbpafiamejdnhcphjbkeiagm", out var s3, out var id3);
+            Assert(cwsOk && s1 == "Chrome Web Store" && id1 == "cjpalhdlnbpafiamejdnhcphjbkeiagm" &&
+                   edgeOk && s2 == "Edge Add-ons" && id2 == "odfafepnkmbhccpbejgmiehpchacaeak" &&
+                   rawOk && s3 == "Chrome Web Store" && id3 == "cjpalhdlnbpafiamejdnhcphjbkeiagm",
+                "ExtensionService parses Chrome Web Store, Edge Add-ons & raw IDs");
+
+            var tmpExtDir = Path.Combine(Path.GetTempPath(), $"ed_crx3_test_{Guid.NewGuid():N}");
+            try
+            {
+                using var zipMs = new MemoryStream();
+                using (var za = new System.IO.Compression.ZipArchive(zipMs, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+                {
+                    var entry = za.CreateEntry("manifest.json");
+                    using var sw = new StreamWriter(entry.Open());
+                    sw.Write("{\"manifest_version\":3,\"name\":\"Test Ext\",\"version\":\"1.0.0\"}");
+                }
+                var zipBytes = zipMs.ToArray();
+                var crxBytes = new byte[12 + 4 + zipBytes.Length];
+                crxBytes[0] = (byte)'C'; crxBytes[1] = (byte)'r'; crxBytes[2] = (byte)'2'; crxBytes[3] = (byte)'4';
+                BitConverter.GetBytes((uint)3).CopyTo(crxBytes, 4);
+                BitConverter.GetBytes((uint)4).CopyTo(crxBytes, 8);
+                Buffer.BlockCopy(zipBytes, 0, crxBytes, 16, zipBytes.Length);
+                ExtensionService.UnpackCrxOrZipBytes(crxBytes, tmpExtDir);
+                Assert(File.Exists(Path.Combine(tmpExtDir, "manifest.json")), "ExtensionService unpacks CRX3 payload safely");
+            }
+            finally
+            {
+                try { if (Directory.Exists(tmpExtDir)) Directory.Delete(tmpExtDir, true); } catch { }
+            }
+
+            var dummyCtx = new BrowserContext();
+            using (var extDlg = new ExtensionsDialog(dummyCtx, null, _ => { }, ThemeService.Dark))
+            {
+                extDlg.StartPosition = FormStartPosition.Manual;
+                extDlg.Location = new Point(-32000, -32000);
+                extDlg.Show();
+                Application.DoEvents();
+                Assert(extDlg.Visible, "ExtensionsDialog renders cleanly");
+                extDlg.Close();
+            }
+        }
+        catch (Exception ex)
+        {
+            failed++;
+            Log("[EXCEPTION] " + ex);
+        }
+
+        Log(failed == 0 ? "ALL SELF-TESTS PASSED" : $"SELF-TESTS FAILED: {failed}");
+        if (!string.IsNullOrEmpty(logPath))
+        {
+            try { File.WriteAllLines(logPath, logLines); } catch { }
+        }
+        return failed == 0 ? 0 : 1;
+    }
+
     public static void RenderUiPreview(string outDir)
     {
         Directory.CreateDirectory(outDir);
         var ctx = new BrowserContext();
+        bool prevBmBar = ctx.Settings.ShowBookmarkBar;
+        ctx.Settings.ShowBookmarkBar = true;
+        bool addedSampleBm = false;
+        if (ctx.Bookmarks.Count == 0)
+        {
+            addedSampleBm = true;
+            ctx.Bookmarks.Add(new BookmarkItem { Type = "folder", Name = "Çalışma", Children = new() { new() { Type = "bookmark", Name = "GitHub", Url = "https://github.com" } } });
+            ctx.Bookmarks.Add(new BookmarkItem { Type = "bookmark", Name = "Google", Url = "https://google.com" });
+            ctx.Bookmarks.Add(new BookmarkItem { Type = "bookmark", Name = "YouTube", Url = "https://youtube.com" });
+            ctx.Bookmarks.Add(new BookmarkItem { Type = "bookmark", Name = "ED Browser", Url = "https://github.com/edizdar/ED-Browser" });
+        }
+
         using var main = new MainForm(ctx, incognito: false, initialUrl: null, skipInitialNavigate: true);
         main.StartPosition = FormStartPosition.Manual;
         main.Location = new Point(-32000, -32000);
         main.Show();
+        main._bookmarkBar.SetBookmarks(ctx.Bookmarks);
         Application.DoEvents();
         using (var bmp = new Bitmap(main.Width, main.Height))
         {
             main.DrawToBitmap(bmp, new Rectangle(0, 0, main.Width, main.Height));
             bmp.Save(Path.Combine(outDir, "main_dark.png"), ImageFormat.Png);
+        }
+
+        var palette = ThemeService.GetPalette(ctx.Settings.Theme, false);
+
+        // Capture AppMenuPopup preview
+        var menuState = main.BuildAppMenuState(49);
+        using (var popup = new AppMenuPopup(main, new AppMenuState
+        {
+            Version = menuState.Version,
+            TotalRamMb = 49,
+            IsDarkTheme = true,
+            AdBlockEnabled = true,
+            ShowBookmarkBar = ctx.Settings.ShowBookmarkBar,
+            CanReopenClosedTab = true,
+            HasNavigatedTab = true,
+            ZoomPercent = 100
+        }, palette, new Point(-31000, -31800), enableOutsideDismiss: false))
+        {
+            popup.Location = new Point(-32000, -32000);
+            popup.Show();
+            Application.DoEvents();
+            using var bmp = new Bitmap(popup.Width, popup.Height);
+            popup.DrawToBitmap(bmp, new Rectangle(0, 0, popup.Width, popup.Height));
+            bmp.Save(Path.Combine(outDir, "app_menu.png"), ImageFormat.Png);
+            popup.SafeClose();
+        }
+
+        // Capture Docked DevTools preview
+        main._devToolsPanel.Visible = true;
+        main._devToolsSplitter.Visible = true;
+        main.ApplyDevToolsDockMode(DevToolsDockMode.Right);
+        main._devToolsPanel.PopulatePreviewSampleData();
+        Application.DoEvents();
+        using (var bmp = new Bitmap(main.Width, main.Height))
+        {
+            main.DrawToBitmap(bmp, new Rectangle(0, 0, main.Width, main.Height));
+            bmp.Save(Path.Combine(outDir, "devtools_docked.png"), ImageFormat.Png);
+        }
+        main.CloseDevToolsPanel();
+
+        // Capture ClearBrowsingDataDialog preview
+        using (var clrDlg = new ClearBrowsingDataDialog(palette))
+        {
+            clrDlg.StartPosition = FormStartPosition.Manual;
+            clrDlg.Location = new Point(-32000, -32000);
+            clrDlg.Show();
+            Application.DoEvents();
+            using var bmp = new Bitmap(clrDlg.Width, clrDlg.Height);
+            clrDlg.DrawToBitmap(bmp, new Rectangle(0, 0, clrDlg.Width, clrDlg.Height));
+            bmp.Save(Path.Combine(outDir, "clear_data_dialog.png"), ImageFormat.Png);
+            clrDlg.Close();
+        }
+
+        // Capture ExtensionsDialog preview
+        using (var extDlg = new ExtensionsDialog(ctx, null, _u => { }, palette))
+        {
+            extDlg.StartPosition = FormStartPosition.Manual;
+            extDlg.Location = new Point(-32000, -32000);
+            extDlg.Show();
+            Application.DoEvents();
+            using var bmp = new Bitmap(extDlg.Width, extDlg.Height);
+            extDlg.DrawToBitmap(bmp, new Rectangle(0, 0, extDlg.Width, extDlg.Height));
+            bmp.Save(Path.Combine(outDir, "extensions_dialog.png"), ImageFormat.Png);
+            extDlg.Close();
         }
 
         // Capture History Panel preview with sample entries if empty
@@ -1742,8 +2435,6 @@ public sealed class MainForm : Form
         }
         if (addedSampleHist) ctx.History.Clear();
         main._sidePanel.HidePanel();
-
-        var palette = ThemeService.GetPalette(ctx.Settings.Theme, false);
 
         var sampleBms = new List<BookmarkItem>
         {
@@ -1776,6 +2467,8 @@ public sealed class MainForm : Form
             bmp.Save(Path.Combine(outDir, names[i]), ImageFormat.Png);
         }
         dlg.Close();
+        if (addedSampleBm) ctx.Bookmarks.Clear();
+        ctx.Settings.ShowBookmarkBar = prevBmBar;
         main.Close();
     }
 }

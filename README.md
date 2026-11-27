@@ -1,8 +1,8 @@
-# 🌐 ED Browser v4.1.0
+# 🌐 ED Browser v4.2.0
 
-> Reklam yok, izleme yok, gereksiz RAM tüketimi yok. **Chromium (Edge WebView2)** motoruyla tam web uyumlu, yerel **WinForms GDI+** arayüzü sayesinde ultra hafif ve tamamen açık kaynak Windows masaüstü tarayıcısı.
+> Reklam yok, izleme yok, gereksiz RAM tüketimi yok. **Chromium (Edge WebView2)** motoruyla tam web uyumlu, **Chrome Web Store & Microsoft Edge Add-ons** eklenti desteği sunan, yerel **WinForms GDI+** arayüzü sayesinde ultra hafif ve tamamen açık kaynak Windows masaüstü tarayıcısı.
 
-[![Sürüm](https://img.shields.io/badge/S%C3%BCr%C3%BCm-v4.1.0-38bdf8?style=flat-square)](https://github.com/edizdar/ED-Browser/releases/latest)
+[![Sürüm](https://img.shields.io/badge/S%C3%BCr%C3%BCm-v4.2.0-38bdf8?style=flat-square)](https://github.com/edizdar/ED-Browser/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11%20(x64)-818cf8?style=flat-square)](https://github.com/edizdar/ED-Browser/releases)
 [![Lisans](https://img.shields.io/badge/Lisans-MIT-34d399?style=flat-square)](LICENSE)
 
@@ -14,8 +14,8 @@
 
 | Sürüm | Dosya | Boyut | Açıklama |
 | :--- | :--- | :--- | :--- |
-| 🛠️ **Kurulum Sürümü (Önerilen)** | `ED.Browser.Setup.4.1.0.exe` | **~1,84 MB** | Kurulum sihirbazı, Masaüstü & Başlat Menüsü kısayolları, Windows Programlar listesi ve `Uninstall.exe` içerir. Profil verileri `%LOCALAPPDATA%\EDBrowser4` altında saklanır. |
-| 🎒 **Taşınabilir (Portable) Sürüm** | `ED.Browser.4.1.0.Portable.exe` | **~1,61 MB** | Kurulum gerektirmez, USB veya herhangi bir klasörden çalışır. Tüm veriler yanındaki `EDBrowserData` klasöründe tutulur. |
+| 🛠️ **Kurulum Sürümü (Önerilen)** | `ED.Browser.Setup.4.2.0.exe` | **~2,01 MB** | Kurulum sihirbazı, Masaüstü & Başlat Menüsü kısayolları, Windows Programlar listesi ve `Uninstall.exe` içerir. Profil verileri `%LOCALAPPDATA%\EDBrowser4` altında saklanır. |
+| 🎒 **Taşınabilir (Portable) Sürüm** | `ED.Browser.4.2.0.Portable.exe` | **~1,79 MB** | Kurulum gerektirmez, USB veya herhangi bir klasörden çalışır. Tüm veriler yanındaki `EDBrowserData` klasöründe tutulur. |
 
 > **Önkoşul:** Windows 10/11'de yerleşik **Microsoft Edge WebView2** ve **.NET 10 Desktop Runtime (x64)** kullanır.
 
@@ -23,62 +23,64 @@
 
 ## 📸 Ekran Görüntüleri
 
-### Ana Ekran & Özelleştirilebilir Yeni Sekme
-Kullanıcı tarafından yönetilen site kısayolları (`+ Site Ekle`), hap (pill) adres çubuğu, canlı `⚡ RAM` göstergesi ve vektörel karanlık arayüz:
+### Ana Ekran, Yakınlaştırma & Sürükle-Bırak Yer İmleri Çubuğu
+Adres çubuğu yanında canlı **`− %100 +` Yakınlaştırma**, **`⚡ RAM`**, **Ekran Görüntüsü**, **Tam Ekran**, **Eklentiler**, özelleştirilebilir **`+ Site Ekle`** yeni sekme sayfası ve doğrudan fare yakalamalı sürükle-bırak yer imi çubuğu:
 
 ![ED Browser Ana Ekran](docs/screenshots/main_dark.png)
 
-### Geçmiş Paneli (Arama & Tekil Silme)
-Anlık arama kutusu, satır üzeri `×` butonu ile tekil kayıt silme ve sağ tık menüsü (`Bu Sitenin Tüm Geçmişini Sil` dahil):
+### Modern `⋮` Uygulama Menüsü & Chrome Tarzı Sabitlenmiş Geliştirici Araçları
+| Modern `⋮` Menüsü (Otomatik Kapanan) | Chrome Tarzı CDP DevTools (Sağ / Alt / Ayrı Pencere) |
+| :---: | :---: |
+| ![Modern Menü](docs/screenshots/app_menu.png) | ![Docked DevTools](docs/screenshots/devtools_docked.png) |
 
-![ED Browser Geçmiş Paneli](docs/screenshots/history_panel.png)
+### Eklenti Mağazası & Tarama Verilerini Temizle
+| Chromium Eklenti Mağazası (Chrome Web Store + Edge Add-ons + CRX) | Tarama Verilerini Temizle |
+| :---: | :---: |
+| ![Eklentiler ve Mağaza](docs/screenshots/extensions_dialog.png) | ![Verileri Temizle](docs/screenshots/clear_data_dialog.png) |
 
-### Modern 2 Sütunlu Ayarlar
+### Geçmiş Paneli & Kurulum Sihirbazı
+| Geçmiş Paneli (Arama & Tekil Silme) | Windows Kurulum Sihirbazı |
+| :---: | :---: |
+| ![ED Browser Geçmiş Paneli](docs/screenshots/history_panel.png) | ![Kurulum Sihirbazı](docs/screenshots/setup-wizard.png) |
+
+### Modern 2 Sütunlu Ayarlar & Yer İmi Düzenleme
 | Genel | Gizlilik & Ağ |
 | :---: | :---: |
 | ![Ayarlar Genel](docs/screenshots/settings_general.png) | ![Ayarlar Gizlilik](docs/screenshots/settings_privacy.png) |
-| **Performans & RAM Optimizasyonu** | **Sistem, Güncelleme & Hakkında** |
-| ![Ayarlar Performans](docs/screenshots/settings_performance.png) | ![Ayarlar Sistem](docs/screenshots/settings_system.png) |
-
-### Yer İmi Ekleme & Kurulum Sihirbazı
-| Yer İmi Ekle / Klasör Oluştur | Windows Kurulum Sihirbazı |
-| :---: | :---: |
-| ![Yer İmi Ekleme](docs/screenshots/bookmark_dialog.png) | ![Kurulum Sihirbazı](docs/screenshots/setup-wizard.png) |
+| **Performans & RAM Optimizasyonu** | **Sistem, Güncelleme & Yer İmi Klasörü** |
+| ![Ayarlar Performans](docs/screenshots/settings_performance.png) | ![Yer İmi Ekleme](docs/screenshots/bookmark_dialog.png) |
 
 ---
 
-## ⚡ v3.1.8 (Electron) vs v4.1.0 (WinForms + WebView2) Karşılaştırması
+## ⚡ v3.1.8 (Electron) vs v4.2.0 (WinForms + WebView2) Karşılaştırması
 
-| Ölçüt | ED Browser v3.1.8 (Electron) | ED Browser v4.1.0 (WinForms + WebView2) |
+| Ölçüt | ED Browser v3.1.8 (Electron) | ED Browser v4.2.0 (WinForms + WebView2) |
 | :--- | :--- | :--- |
-| **Taşınabilir `.exe` Boyutu** | 72,67 MB | **1,61 MB** (**%97,8 daha küçük**) |
-| **Kurulum `.exe` Boyutu** | 73,00 MB | **1,84 MB** (**%97,5 daha küçük**) |
-| **Çalıştırılınca Açılan Disk Alanı** | 251,72 MB | **~1,6–1,8 MB** (sistem WebView2 paylaşılır) |
+| **Taşınabilir `.exe` Boyutu** | 72,67 MB | **1,79 MB** (**%97,5 daha küçük**) |
+| **Kurulum `.exe` Boyutu** | 73,00 MB | **2,01 MB** (**%97,2 daha küçük**) |
+| **Çalıştırılınca Açılan Disk Alanı** | 251,72 MB | **~1,8–2,0 MB** (sistem WebView2 paylaşılır) |
 | **Arayüz Motoru** | Ekstra Chromium Renderer süreci | **Saf yerel WinForms GDI+** (0 ekstra renderer) |
 | **Pasif Sekme Bellek Yönetimi** | Yalnızca JS zamanlayıcı kısma | **`MemoryUsageTargetLevel.Low` + `TrySuspendAsync()` + Derin Boşaltma (`0 MB`)** |
+| **Geliştirici Araçları** | Kısıtlı harici pencere | **CDP Tabanlı Gömülü DevTools (Öğeler, Konsol REPL, Ağ, Depo, Kaynak, Öğe Seçici, Cihaz Emülasyonu)** |
+| **Eklenti Mağazası** | Yok | **Chrome Web Store + Microsoft Edge Add-ons + `.crx`/`.zip`/Klasör** |
 | **Şifre Kasası Güvenliği** | Sabit anahtarlı AES-256-CBC | **AES-256-GCM + Windows DPAPI** (kullanıcıya özel anahtar) |
 | **Reklam & İzleyici Engelleyici** | 45 ağ | **150+ reklam, takipçi ve telemetri ağı** |
-| **Güncelleme Bildirimi** | Yok | **Açılışta + Ayarlardan tek tıkla GitHub kontrolü** |
+| **Güncelleme Bildirimi** | Yok | **Açılışta + Menü/Ayarlardan tek tıkla GitHub kontrolü** |
 
 ---
 
 ## ✨ Öne Çıkan Özellikler
 
-- **Agresif RAM Optimizasyonu:**
-  - Arka planda kalan sekmeler önce düşük bellek moduna geçer, belirlenen süre sonunda `TrySuspendAsync()` ile uyutulur (`💤`), uzun süre kullanılmazsa derin boşaltma (`❄️`) ile tamamen sıfırlanır.
-  - Araç çubuğundaki **`⚡ XX MB`** butonuna tıklayarak tüm pasif sekmeleri anında uyutup çalışma kümesini (working set) sıkıştırabilirsin.
-- **Chrome Gibi Geliştirici Araçları (`F12` / `Ctrl+Shift+I` / Sağ Tık → İncele):**
-  - Tarayıcının sağ tarafına sabitlenmiş (docked), sürüklenebilir ayırıcılı DevTools paneli; kısayola tekrar basınca kapanır.
-- **Yerleşik Reklam & İzleyici Engelleyici:**
-  - 150'den fazla reklam ve analitik ağı sayfa yüklenmeden engellenir; adres çubuğundaki kalkan simgesinden anlık açılıp kapatılabilir.
-- **AES-256-GCM + Windows DPAPI Yerel Şifre Yöneticisi:**
-  - Hiçbir veri buluta gitmez. Anahtar Windows DPAPI ile o kullanıcı hesabına bağlı saklanır. Formlarda otomatik **Doldur / Kaydet** çubuğu ve Chrome/Edge CSV içe aktarımı sunar.
-- **Kullanıcı Kontrollü Yeni Sekme & Yer İmleri:**
-  - Yeni sekmede sabit site kalabalığı yoktur; **`+ Site Ekle`** ile kendi kısayollarını ekleyebilirsin.
-  - Yer imi çubuğunda fareyle **basılı tutup sürükleyerek** sıralama yapabilir veya bir klasörün içine bırakabilirsin. Klasör menüleri fare çıkınca otomatik kapanır.
-- **Proxy & Cloudflare DNS-over-HTTPS:**
-  - Doğrudan, Sistem Proxy, Özel HTTP/SOCKS5 veya Tor (`127.0.0.1:9050`) + Cloudflare DoH (`1.1.1.1`) ve dahili IP test aracı.
-- **Ekran Görüntüsü (`Ctrl+Shift+S`), Gizli Mod (`Ctrl+Shift+P`), İndirme Yöneticisi (`Ctrl+Shift+J`), Sayfada Ara (`Ctrl+F`)** ve **Windows Varsayılan Tarayıcı** kaydı.
+- **Agresif RAM Optimizasyonu:** Arka plan sekmelerinde düşük bellek modu, otomatik `TrySuspendAsync()` sekme uyutma (`💤`), derin bellek boşaltma (`❄️`) ve araç çubuğundan canlı `⚡ XX MB` ile tek tıkla temizleme.
+- **Gerçek Chrome Tarzı Geliştirici Araçları (`F12` / `Ctrl+Shift+I` / Sağ Tık → İncele):**
+  - Sağa veya alta sabitlenebilen gerçek CDP tabanlı panel: **Öğeler** (canlı stil editörü), **Konsol + JS REPL**, **Ağ**, **Depo** (Çerezler / LocalStorage / SessionStorage), **Kaynak**, **Sayfadan Öğe Seçici (`Ctrl+Shift+C`)** ve **Mobil/Tablet Cihaz Emülasyonu**; dilersen tek tıkla Tam Chromium DevTools penceresi.
+- **Chromium Eklenti Desteği (`Ctrl+Shift+E`):**
+  - **Chrome Web Store** ve **Microsoft Edge Add-ons** eklentilerini URL/ID ile veya mağaza sayfasındayken üstte açılan tek tık **`ED Browser'a Ekle`** çubuğuyla indirip CRX3 paketini açarak doğrudan WebView2 profiline yükler; `.crx`/`.zip` ve açık klasör yüklemeyi destekler.
+- **Doğrudan Araç Çubuğu & Modern `⋮` Menü (`Alt + Sol Kenar Çubuğu`):**
+  - Adres çubuğu yanında **`− %100 +` Yakınlaştırma**, **Ekran Görüntüsü**, **Tam Ekran**, **Eklentiler** ve isteğe bağlı Opera/Yandex tarzı **Sol Kenar Çubuğu (`Ctrl+Shift+L`)**.
+  - Web sayfasına tıklandığında anında kapanan DWM yuvarlatılmış **`⋮` Uygulama Menüsü**: Kapalı Sekmeyi Yeniden Aç (`Ctrl+Shift+T`), Sekme Sabitleme/Ses Kapatma, PDF/Sayfa Kaydetme, Sayfa Kaynağı (`Ctrl+U`), Tarama Verilerini Temizle (`Ctrl+Shift+Del`), Hızlı Tema/Reklam Engelleyici.
+- **Sorunsuz Sürükle-Bırak Yer İmleri:**
+  - Yer imi çubuğunda doğrudan fare yakalamalı sürükleme: cam hayalet kapsül, parlak ekleme çizgisi ve klasörlerin ortasına bırakınca otomatik klasör içi taşıma; taşan öğeler için `»` menüsü.
 
 ---
 
@@ -86,21 +88,19 @@ Anlık arama kutusu, satır üzeri `×` butonu ile tekil kayıt silme ve sağ t�
 
 | Kısayol | İşlev |
 | :--- | :--- |
-| `Ctrl+T` / `Ctrl+W` | Yeni sekme aç / Aktif sekmeyi kapat |
+| `Ctrl+T` / `Ctrl+W` / `Ctrl+Shift+T` | Yeni sekme / Kapat / Kapalı sekmeyi yeniden aç |
+| `Ctrl+N` / `Ctrl+Shift+P` | Yeni pencere / Yeni gizli pencere |
 | `Ctrl+1` … `Ctrl+9` | İlgili sekmeye geç |
-| `Ctrl+L` | Adres çubuğuna odaklan |
-| `F5` / `Ctrl+R` | Sayfayı yenile |
+| `Ctrl+L` / `F5` / `Ctrl+R` | Adres çubuğuna odaklan / Yenile |
 | `Alt+←` / `Alt+→` | Geri / İleri git |
-| `Ctrl+D` | Yer imi ekle / düzenle / kaldır |
-| `Ctrl+Shift+B` | Yer imi çubuğunu göster / gizle |
-| `Ctrl+F` | Sayfada ara |
-| `Ctrl+P` | Sayfayı yazdır |
-| `Ctrl+Shift+J` | İndirilenler paneli |
-| `Ctrl+Shift+S` | Ekran görüntüsü al (Tüm sayfa / Alan seç) |
-| `Ctrl+Shift+P` | Gizli mod penceresi aç |
+| `Ctrl+D` / `Ctrl+Shift+O` / `Ctrl+Shift+B` | Yer imi ekle / Panel / Yer imi çubuğu |
+| `Ctrl+H` / `Ctrl+Shift+J` / `Ctrl+Shift+E` | Geçmiş / İndirilenler / Eklentiler |
+| `Ctrl+Shift+L` | Opera/Yandex tarzı Sol Kenar Çubuğunu aç / gizle |
+| `Ctrl+F` / `Ctrl+S` / `Ctrl+P` / `Ctrl+U` | Sayfada ara / Farklı kaydet / Yazdır / Kaynak kod |
+| `Ctrl+Shift+S` / `Ctrl+Shift+Del` | Ekran görüntüsü / Tarama verilerini temizle |
 | `Ctrl++` / `Ctrl+-` / `Ctrl+0` | Yakınlaştır / Uzaklaştır / %100 sıfırla |
 | `F11` / `ESC` | Tam ekran aç / çık |
-| `F12` / `Ctrl+Shift+I` | Geliştirici araçlarını aç / kapat |
+| `F12` / `Ctrl+Shift+I` / `Ctrl+Shift+C` | Geliştirici araçları / Sayfadan öğe seçici |
 
 ---
 
@@ -110,10 +110,10 @@ Gereksinimler: **.NET 10 SDK** (Windows x64)
 
 ```powershell
 # 1. Taşınabilir tek dosya .exe derle
-dotnet publish EDBrowser.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
+dotnet publish EDBrowser.csproj -c Release -r win-x64 --no-self-contained -o publish
 
 # 2. Kurulum Sihirbazı (.exe) derle (taşınabilir sürümü içine gömer)
-dotnet publish Installer\EDBrowser.Setup.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish
+dotnet publish Installer\EDBrowser.Setup.csproj -c Release -r win-x64 --no-self-contained -o publish
 ```
 
 ---

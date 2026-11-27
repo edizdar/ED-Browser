@@ -22,6 +22,8 @@ public sealed class StorageService
     public string DownloadsPath => Path.Combine(DataDirectory, "downloads.json");
     public string PasswordsPath => Path.Combine(DataDirectory, "passwords.json");
     public string ShortcutsPath => Path.Combine(DataDirectory, "shortcuts.json");
+    public string ExtensionsPath => Path.Combine(DataDirectory, "extensions.json");
+    public string ExtensionsDirectory => Path.Combine(DataDirectory, "Extensions");
     public string KeyPath => Path.Combine(DataDirectory, "vault.key");
 
     public StorageService()
@@ -106,7 +108,7 @@ public sealed class StorageService
     public BrowserSettings LoadSettings()
     {
         var s = LoadJson(SettingsPath, new BrowserSettings());
-        s.Version = "4.1.0";
+        s.Version = "4.2.0";
         s.AutoSleepMinutes = Math.Clamp(s.AutoSleepMinutes, 1, 120);
         s.DeepUnloadMinutes = Math.Clamp(s.DeepUnloadMinutes, 2, 240);
         s.RendererProcessLimit = Math.Clamp(s.RendererProcessLimit, 1, 8);
@@ -131,4 +133,7 @@ public sealed class StorageService
 
     public List<QuickShortcut> LoadShortcuts() => LoadJson(ShortcutsPath, new List<QuickShortcut>());
     public void SaveShortcuts(List<QuickShortcut> items) => SaveJson(ShortcutsPath, items);
+
+    public List<InstalledExtension> LoadExtensions() => LoadJson(ExtensionsPath, new List<InstalledExtension>());
+    public void SaveExtensions(List<InstalledExtension> items) => SaveJson(ExtensionsPath, items);
 }

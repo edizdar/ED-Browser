@@ -220,6 +220,17 @@ public sealed class SidePanelHost : Panel
                         }
                     });
                 }
+                if (!_ctx.Bookmarks.Any(x => x.Id == rightBm.Id))
+                {
+                    ctxMenu.Items.Add("Kök Dizine Taşı", null, (_, _) =>
+                    {
+                        RemoveBookmarkById(_ctx.Bookmarks, rightBm.Id);
+                        _ctx.Bookmarks.Add(rightBm);
+                        _ctx.Storage.SaveBookmarks(_ctx.Bookmarks);
+                        BookmarksChanged?.Invoke();
+                        RenderBookmarks();
+                    });
+                }
                 ctxMenu.Items.Add("Sil", null, (_, _) =>
                 {
                     RemoveBookmarkById(_ctx.Bookmarks, rightBm.Id);
@@ -232,7 +243,22 @@ public sealed class SidePanelHost : Panel
         };
 
         tree.ItemDrag += (_, e) => { if (e.Item is TreeNode tn) tree.DoDragDrop(tn, DragDropEffects.Move); };
-        tree.DragEnter += (_, e) => e.Effect = DragDropEffects.Move;
+        tree.DragEnter += (_, e) =>
+        {
+            if (e.Data?.GetData(typeof(TreeNode)) is TreeNode)
+                e.Effect = DragDropEffects.Move;
+        };
+        tree.DragOver += (_, e) =>
+        {
+            if (e.Data?.GetData(typeof(TreeNode)) is TreeNode)
+            {
+                e.Effect = DragDropEffects.Move;
+                var pt = tree.PointToClient(new Point(e.X, e.Y));
+                var over = tree.GetNodeAt(pt);
+                if (over is not null && tree.SelectedNode != over)
+                    tree.SelectedNode = over;
+            }
+        };
         tree.DragDrop += (_, e) =>
         {
             if (e.Data?.GetData(typeof(TreeNode)) is not TreeNode draggedNode) return;

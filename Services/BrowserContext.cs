@@ -9,6 +9,7 @@ public sealed class BrowserContext
     public BrowserSettings Settings { get; set; }
     public PasswordVaultService Vault { get; }
     public AdBlockerService AdBlocker { get; }
+    public ExtensionService Extensions { get; }
     public List<BookmarkItem> Bookmarks { get; set; }
     public List<HistoryEntry> History { get; set; }
     public List<DownloadRecord> Downloads { get; set; }
@@ -23,6 +24,7 @@ public sealed class BrowserContext
         Settings = Storage.LoadSettings();
         Vault = new PasswordVaultService(Storage);
         AdBlocker = new AdBlockerService();
+        Extensions = new ExtensionService(Storage);
         Bookmarks = Storage.LoadBookmarks();
         History = Storage.LoadHistory();
         Downloads = Storage.LoadDownloads();
@@ -43,7 +45,8 @@ public sealed class BrowserContext
             var args = BuildBrowserArguments(Settings);
             var options = new CoreWebView2EnvironmentOptions(args)
             {
-                Language = "tr-TR"
+                Language = "tr-TR",
+                AreBrowserExtensionsEnabled = true
             };
 
             var userData = userDataOverride ?? Storage.WebViewUserDataDirectory;
